@@ -678,6 +678,7 @@ export component SettingsDialog inherits Rectangle {
         @tr("Turkish"),
         @tr("Simplified Chinese"),
         @tr("Russian"),
+        @tr("Portuguese (Brazil)"),
     ];
     private property <[string]> time-format-options: [
         @tr("Automatic"),
@@ -692,7 +693,8 @@ export component SettingsDialog inherits Rectangle {
         : root.language_mode == "es" ? 2
         : root.language_mode == "tr" ? 3
         : root.language_mode == "zh_Hans" ? 4
-        : root.language_mode == "ru" ? 5 : 0;
+        : root.language_mode == "ru" ? 5
+        : root.language_mode == "pt_BR" ? 6 : 0;
     private property <int> time-format-index: root.time_format == "12h" ? 1
         : root.time_format == "24h" ? 2 : 0;
 
@@ -769,7 +771,8 @@ export component SettingsDialog inherits Rectangle {
             : index == 2 ? "es"
             : index == 3 ? "tr"
             : index == 4 ? "zh_Hans"
-            : index == 5 ? "ru" : "system";
+            : index == 5 ? "ru"
+            : index == 6 ? "pt_BR" : "system";
         root.save_language(root.language_mode);
     }
 

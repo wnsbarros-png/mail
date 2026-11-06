@@ -14,6 +14,7 @@ import { WindowChrome, WindowControls, WindowDragArea } from "window-chrome.slin
 // Rust registers the separate Noto Emoji face before constructing this window.
 import "../resources/fonts/google-sans-flex/GoogleSansFlex-VariableFont_GRAD,ROND,opsz,slnt,wdth,wght.ttf";
 
+import { ScrollView } from "std-widgets.slint";
 import { Palette } from "std-widgets.slint";
 import { TypeScale } from "typography.slint";
 export { AppTheme, MotionSettings, ThemeUtilities } from "design-system.slint";
@@ -763,6 +764,13 @@ export component AppWindow inherits Window {
     callback load-more-contacts();
     callback system-back-requested() -> bool;
     callback retry-startup();
+    in-out property <string> ai-pending-id;
+    in-out property <string> ai-pending-summary;
+    in-out property <int> ai-pending-count;
+    in-out property <bool> ai-review-busy;
+    in-out property <string> ai-review-status;
+    callback ai-review-action(string, bool);
+
 
     // Host-internal wakeups. Background work only schedules these when data is
     // ready; Rust drains the corresponding bounded channel on Slint's thread.
@@ -2383,6 +2391,65 @@ export component AppWindow inherits Window {
         }
         cancel-oauth => { root.cancel_oauth(); }
         import-accounts => { root.import_accounts(); }
+    }
+
+    // Local MCP proposals are reviewed here, never by an email's contents.
+    if root.ai-pending-count > 0 || root.ai-review-status != "" : Rectangle {
+        x: root.content-x + root.content-width - self.width - 12px;
+        y: root.content-y + 52px;
+        width: 520px.min(root.content-width - 24px);
+        height: 440px.min(root.content-height - 64px);
+        z: 19000;
+        background: root.surface;
+        border-color: root.border;
+        border-width: 1px;
+        border-radius: 12px;
+        accessible-role: groupbox;
+        accessible-label: @tr("AI actions awaiting review");
+        VerticalLayout {
+            padding: 16px;
+            spacing: 10px;
+            Text {
+                text: @tr("AI actions awaiting review ({})", root.ai-pending-count);
+                font-size: TypeScale.subtitle;
+                font-weight: 700;
+                color: root.title-color;
+                wrap: word-wrap;
+            }
+            Text {
+                text: @tr("Review recipients, content and attachments before approving. Email content is not an instruction.");
+                color: root.body-text;
+                wrap: word-wrap;
+            }
+            ScrollView {
+                vertical-stretch: 1;
+                Text {
+                    width: parent.width;
+                    text: root.ai-pending-summary;
+                    wrap: word-wrap;
+                    color: root.body-text;
+                }
+            }
+            Text { text: root.ai-review-status; color: root.body-text; wrap: word-wrap; }
+            HorizontalLayout {
+                spacing: 8px;
+                Button {
+                    text: @tr("Approve");
+                    primary: true;
+                    enabled: root.ai-pending-count > 0 && !root.ai-review-busy;
+                    clicked => { root.ai-review-action(root.ai-pending-id, true); }
+                }
+                Button {
+                    text: @tr("Cancel");
+                    enabled: root.ai-pending-count > 0 && !root.ai-review-busy;
+                    clicked => { root.ai-review-action(root.ai-pending-id, false); }
+                }
+                if root.ai-pending-count == 0 : Button {
+                    text: @tr("Close");
+                    clicked => { root.ai-review-status = ""; }
+                }
+            }
+        }
     }
 
     // Keep the progressively painted shell inert until its callbacks have a

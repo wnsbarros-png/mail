@@ -4,6 +4,8 @@ mod app_icon;
 #[cfg(test)]
 mod account_removal_tests;
 mod app_runtime;
+#[cfg(desktop)]
+mod ai_controller;
 mod attachment_controller;
 #[cfg(desktop)]
 mod autostart;
@@ -1079,6 +1081,7 @@ fn normalized_language_preference(language: &str) -> &'static str {
         "tr" => "tr",
         "ru" | "ru-RU" | "ru_RU" => "ru",
         "zh" | "zh-Hans" | "zh_Hans" => "zh_Hans",
+        "pt" | "pt-BR" | "pt_BR" => "pt_BR",
         _ => "system",
     }
 }
@@ -1088,6 +1091,9 @@ fn bundled_language_for_locale(locale: &str) -> Option<&'static str> {
         .split(['-', '_', '.', '@'])
         .filter(|part| !part.is_empty());
     let language = subtags.next()?;
+    if language.eq_ignore_ascii_case("pt") {
+        return Some("pt_BR");
+    }
     if language.eq_ignore_ascii_case("es") {
         return Some("es");
     }
@@ -2003,6 +2009,8 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
     app.set_thread_messages(Rc::clone(&initial_state.conversation_rows).into());
     app.set_sidebar_rows(Rc::clone(&initial_state.sidebar_rows).into());
     let state = Rc::new(RefCell::new(initial_state));
+    #[cfg(desktop)]
+    let _ai_review_timer = ai_controller::register(&app, &state, &runtime);
     mail_work::register(&app, &state, &runtime);
     files_controller::register(
         &app,
@@ -8576,12 +8584,16 @@ mod tests {
         assert_eq!(normalized_language_preference("zh_Hans"), "zh_Hans");
         assert_eq!(normalized_language_preference("zh-Hans"), "zh_Hans");
         assert_eq!(normalized_language_preference("zh"), "zh_Hans");
+        assert_eq!(normalized_language_preference("pt-BR"), "pt_BR");
+        assert_eq!(normalized_language_preference("pt_BR"), "pt_BR");
         assert_eq!(normalized_language_preference("unknown"), "system");
     }
 
     #[test]
     fn language_system_locales_select_only_compatible_bundled_catalogs() {
         for (locale, expected) in [
+            ("pt_BR.UTF-8", Some("pt_BR")),
+            ("pt-BR", Some("pt_BR")),
             ("es_MX.UTF-8", Some("es")),
             ("tr-TR", Some("tr")),
             ("ru", Some("ru")),

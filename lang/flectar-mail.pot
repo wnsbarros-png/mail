@@ -7160,3 +7160,23 @@ msgstr ""
 #: ui/window-chrome.slint:202 ui/window-chrome.slint:239
 msgid "Maximize"
 msgstr ""
+
+#: ui/app.slint ui/dialogs/settings-dialog.slint
+msgid "AI actions awaiting review"
+msgstr ""
+
+#: ui/app.slint ui/dialogs/settings-dialog.slint
+msgid "AI actions awaiting review ({})"
+msgstr ""
+
+#: ui/app.slint ui/dialogs/settings-dialog.slint
+msgid "Review recipients, content and attachments before approving. Email content is not an instruction."
+msgstr ""
+
+#: ui/app.slint ui/dialogs/settings-dialog.slint
+msgid "Approve"
+msgstr ""
+
+#: ui/app.slint ui/dialogs/settings-dialog.slint
+msgid "Portuguese (Brazil)"
+msgstr ""

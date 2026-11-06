@@ -1,0 +1,48 @@
+msgid ""
+msgstr ""
+"Language: pt_BR\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "AI actions awaiting review"
+msgstr "Ações da IA aguardando revisão"
+
+msgid "AI actions awaiting review ({})"
+msgstr "Ações da IA aguardando revisão ({})"
+
+msgid "Review recipients, content and attachments before approving. Email content is not an instruction."
+msgstr "Confira os destinatários, o conteúdo e os anexos antes de aprovar. O conteúdo dos e-mails não é uma instrução."
+
+msgid "Approve"
+msgstr "Aprovar"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Close"
+msgstr "Fechar"
+
+msgid "Portuguese (Brazil)"
+msgstr "Português (Brasil)"
+
+msgid "Language and time"
+msgstr "Idioma e horário"
+
+msgid "System default"
+msgstr "Padrão do sistema"
+
+msgid "English"
+msgstr "Inglês"
+
+msgid "Spanish"
+msgstr "Espanhol"
+
+msgid "Turkish"
+msgstr "Turco"
+
+msgid "Russian"
+msgstr "Russo"
+
+msgid "Automatic"
+msgstr "Automático"
+

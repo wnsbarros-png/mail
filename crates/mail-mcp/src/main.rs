@@ -50,21 +50,35 @@ async fn main() -> Result<()> {
 
     let paths = parse_paths()?;
     paths.ensure().context("creating application directories")?;
-    // One MCP engine per profile: a second one would run a second sync engine.
-    let lock = std::fs::File::create(paths.data_dir.join(branding::LOCK_FILE))?;
-    if lock.try_lock().is_err() {
-        bail!(
-            "another mail-mcp server is already running for {}",
-            paths.data_dir.display()
-        );
-    }
-    let config = AiConfig::load_or_init(&paths.data_dir);
-    let core = Core::start_mail_ui(paths)
-        .await
-        .context("starting the mail core")?;
-    // No window will report in; start account sync right away.
-    core.notify_ui_ready();
-    let server = Server::new(core, config);
+    // Prefer the live desktop engine. If discovery races with startup,
+    // wait briefly while the shared profile lock prevents a second engine.
+    let (server, mut bridge, _lock) = match mail_mcp::bridge::ProfileGuard::acquire(&paths.data_dir)
+    {
+        Ok(lock) => {
+            // An unlocked profile means there is no live desktop host.
+            // Ignore stale discovery rather than sending a token to a port
+            // that another process could have reused after a crash.
+            let config = AiConfig::load_or_init(&paths.data_dir);
+            let core = Core::start_mail_ui(paths.clone())
+                .await
+                .context("starting the mail core")?;
+            core.notify_ui_ready();
+            (Some(Server::new(core, config)), None, Some(lock))
+        }
+        Err(error) => {
+            let mut client = None;
+            for _ in 0..40 {
+                if let Ok(connected) =
+                    mail_mcp::bridge::BridgeClient::connect(&paths.data_dir).await
+                {
+                    client = Some(connected);
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+            (None, Some(client.ok_or(error)?), None)
+        }
+    };
 
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     let mut stdout = tokio::io::stdout();
@@ -73,7 +87,17 @@ async fn main() -> Result<()> {
             continue;
         }
         let reply = match serde_json::from_str(&line) {
-            Ok(msg) => server.handle(msg).await,
+            Ok(msg) => {
+                if let Some(client) = bridge.as_mut() {
+                    client.handle(msg).await?
+                } else {
+                    server
+                        .as_ref()
+                        .expect("standalone server")
+                        .handle(msg)
+                        .await
+                }
+            }
             Err(e) => Some(
                 serde_json::json!({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":format!("parse error: {e}")}}),
             ),
@@ -84,6 +108,5 @@ async fn main() -> Result<()> {
             stdout.flush().await?;
         }
     }
-    drop(lock);
     Ok(())
 }

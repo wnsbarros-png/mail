@@ -333,6 +333,12 @@ pub fn display_preview(preview: &str) -> String {
 /// into the Slint application.
 #[derive(Clone)]
 pub struct CoreMailSource {
+    #[cfg(desktop)]
+    ai_server: mail_mcp::Server,
+    #[cfg(desktop)]
+    _ai_bridge: Arc<mail_mcp::bridge::BridgeHost>,
+    #[cfg(desktop)]
+    _profile_guard: Arc<mail_mcp::bridge::ProfileGuard>,
     core: Arc<Core>,
     account_revision: Arc<std::sync::atomic::AtomicU64>,
     /// The active profile's accounts, sorted; the mail view shows only these.
@@ -349,6 +355,9 @@ pub struct AccountSnapshot {
 }
 
 impl CoreMailSource {
+    #[cfg(desktop)]
+    pub(crate) fn ai_server(&self) -> mail_mcp::Server { self.ai_server.clone() }
+
     pub fn account_revision(&self) -> u64 {
         self.account_revision
             .load(std::sync::atomic::Ordering::Acquire)
@@ -454,10 +463,24 @@ impl CoreMailSource {
         credentials: flectar_mail_core::accounts::credentials::CredentialStoreHandle,
         oauth_redirects: flectar_mail_core::oauth::redirect::OAuthRedirectBrokerHandle,
     ) -> Result<Self, String> {
+        #[cfg(desktop)]
+        let guard = mail_mcp::bridge::ProfileGuard::acquire(&paths.data_dir).map_err(|e| e.to_string())?;
+        #[cfg(desktop)]
+        let ai_data_dir = paths.data_dir.clone();
         let core = Core::start_mail_ui_with_platform(paths, credentials, oauth_redirects)
             .await
             .map_err(|error| error.to_string())?;
+        #[cfg(desktop)]
+        let ai_server = mail_mcp::Server::embedded(core.clone(), mail_mcp::AiConfig::load_or_init(&ai_data_dir));
+        #[cfg(desktop)]
+        let ai_bridge = mail_mcp::bridge::BridgeHost::start(&ai_data_dir, ai_server.clone()).await.map_err(|e| e.to_string())?;
         Ok(Self {
+            #[cfg(desktop)]
+            ai_server,
+            #[cfg(desktop)]
+            _ai_bridge: Arc::new(ai_bridge),
+            #[cfg(desktop)]
+            _profile_guard: Arc::new(guard),
             core: Arc::new(core),
             account_revision: Arc::default(),
             profile_accounts: Arc::default(),

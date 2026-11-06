@@ -198,6 +198,7 @@ fn config_defaults_are_safe_and_persisted() {
     let c = AiConfig::load_or_init(dir.path());
     assert!(c.ai_actions_require_confirmation);
     assert!(!c.allow_permanent_delete);
+    assert!(!c.allow_mcp_confirmation);
     assert!(dir.path().join(branding::CONFIG_FILE).exists());
     std::fs::write(dir.path().join(branding::CONFIG_FILE), "{not json").unwrap();
     assert!(AiConfig::load_or_init(dir.path()).ai_actions_require_confirmation);
