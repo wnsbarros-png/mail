@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/flectar-mail-core", "crates/renderer-probe"]
+members = ["crates/flectar-mail-core", "crates/renderer-probe", "crates/mail-mcp"]
 exclude = ["crates/candle-core", "crates/blitz-dom", "crates/blitz-paint", "crates/i-slint-backend-winit", "crates/parley", "crates/parley_emoji"]
 resolver = "3"
 
