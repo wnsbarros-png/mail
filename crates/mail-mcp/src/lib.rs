@@ -18,6 +18,9 @@ pub mod bridge;
 use anyhow::{Context, Result, anyhow, bail};
 use flectar_mail_core::Core;
 use flectar_mail_core::MessagePageRequest;
+use flectar_mail_core::cloud_links::{
+    self, CloudProvider, LinkOptions, StagedFiles, StorageProvider,
+};
 use flectar_mail_core::models::{
     ActionKind, ActionTarget, Address, MessageDetail, MessageSummary, PerformActionArgs,
     QueueSendArgs, SaveDraftArgs, View,
@@ -80,8 +83,14 @@ impl AiConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 enum PendingKind {
+    Cloud {
+        draft_id: i64,
+        snapshot: Value,
+        files: Arc<StagedFiles>,
+        options: LinkOptions,
+    },
     Send {
         draft_id: i64,
         snapshot: Value,
@@ -92,7 +101,7 @@ enum PendingKind {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct Pending {
     kind: PendingKind,
     summary: Value,
@@ -106,6 +115,8 @@ pub struct Server {
     config: AiConfig,
     pending: Arc<Mutex<HashMap<String, Pending>>>,
     embedded: bool,
+    cloud_progress: Arc<std::sync::Mutex<Value>>,
+    storage_override: Option<Arc<dyn StorageProvider>>,
 }
 
 fn arg_i64(args: &Value, key: &str) -> Option<i64> {
@@ -301,6 +312,8 @@ impl Server {
             config,
             pending: Arc::new(Mutex::new(HashMap::new())),
             embedded: false,
+            cloud_progress: Arc::new(std::sync::Mutex::new(json!({}))),
+            storage_override: None,
         }
     }
 
@@ -332,6 +345,124 @@ impl Server {
             .into_iter()
             .map(|(id, action)| json!({"pendingId":id,"summary":action.summary}))
             .collect()
+    }
+
+    /// Pluggable storage boundary, also used for deterministic no-network tests.
+    pub fn with_storage_provider(mut self, provider: Arc<dyn StorageProvider>) -> Self {
+        self.storage_override = Some(provider);
+        self
+    }
+    pub fn cloud_progress(&self) -> Value {
+        self.cloud_progress
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    /// A single policy boundary for future approval rules/history. Cloud uploads
+    /// ALWAYS require the trusted app entry point, never MCP confirmation.
+    async fn requires_app_approval(&self, id: &str) -> bool {
+        self.pending
+            .lock()
+            .await
+            .get(id)
+            .is_some_and(|p| matches!(p.kind, PendingKind::Cloud { .. }))
+    }
+
+    pub async fn stage_cloud_draft(
+        &self,
+        mut draft: SaveDraftArgs,
+        options: LinkOptions,
+    ) -> Result<Value> {
+        if !self.embedded {
+            bail!(
+                "Open the desktop app before proposing cloud attachments; upload approval must happen in the app"
+            );
+        }
+        cloud_links::validate_expiry(&options)?;
+        if draft.to.is_empty() && draft.cc.is_empty() && draft.bcc.is_empty() {
+            bail!("the message has no recipients");
+        }
+        let files = Arc::new(self.core.stage_cloud_files(&draft.attachments).await?);
+        let sources = draft
+            .attachments
+            .iter()
+            .map(|a| a.file_path.clone())
+            .collect::<Vec<_>>();
+        draft.attachments.clear();
+        let mut summary = json!({"action":"send_cloud_links","accountId":draft.account_id,
+            "to":draft.to.iter().map(format_address).collect::<Vec<_>>(),"cc":draft.cc.iter().map(format_address).collect::<Vec<_>>(),"bcc":draft.bcc.iter().map(format_address).collect::<Vec<_>>(),
+            "subject":draft.subject,"body":draft.body_text,"provider":options.provider.label(),"storageAccountId":options.storage_account_id,"expiresAt":options.expires_at,
+            "anyoneWithLink":true,"uploadOnlyAfterApproval":true,
+            "files":files.files.iter().zip(&sources).map(|(f,path)|json!({"filename":f.name,"size":f.size,"sourcePath":path})).collect::<Vec<_>>()});
+        let draft_id = self.core.save_draft(draft).await?;
+        let snapshot = serde_json::to_value(self.core.get_draft(draft_id).await?)?;
+        summary["from"] = snapshot["from"].clone();
+        let id = new_pending_id();
+        self.pending.lock().await.insert(
+            id.clone(),
+            Pending {
+                kind: PendingKind::Cloud {
+                    draft_id,
+                    snapshot,
+                    files,
+                    options,
+                },
+                summary: summary.clone(),
+                created: Instant::now(),
+            },
+        );
+        Ok(
+            json!({"status":"pending_confirmation","pendingId":id,"draftId":draft_id,"summary":summary,"next":"Review the files, provider and public-link warning, then approve IN THE APP. Nothing has been uploaded."}),
+        )
+    }
+
+    async fn prepare_attachments(
+        &self,
+        args: &Value,
+        account_id: i64,
+    ) -> Result<(
+        Vec<flectar_mail_core::models::DraftAttachmentIn>,
+        Option<LinkOptions>,
+    )> {
+        let files =
+            attachments::validate_limit(args.get("attachments"), cloud_links::MAX_CLOUD_BYTES)
+                .await?;
+        let mut total = 0u64;
+        for f in &files {
+            total = total.saturating_add(tokio::fs::metadata(&f.file_path).await?.len());
+        }
+        let settings = self.core.cloud_settings();
+        let over = total > settings.mail_limit(account_id);
+        let explicit = arg_bool(args, "attachments_as_link").unwrap_or(false);
+        let link = explicit || (over && settings.auto_link_over_limit);
+        if !link && over {
+            bail!(
+                "Attachments exceed the account limit; choose attachments_as_link=true and a provider. No upload was performed."
+            );
+        }
+        if !link {
+            return Ok((files, None));
+        }
+        if files.is_empty() {
+            bail!("Choose files for cloud links");
+        }
+        let provider = match arg_str(args, "provider") {
+            Some(p) => CloudProvider::parse(p)?,
+            None => settings
+                .default_provider
+                .ok_or_else(|| anyhow!("Choose google_drive, one_drive or dropbox"))?,
+        };
+        Ok((
+            files,
+            Some(LinkOptions {
+                provider,
+                storage_account_id: arg_i64(args, "storage_account_id")
+                    .or(settings.storage_account_id)
+                    .unwrap_or(account_id),
+                expires_at: arg_str(args, "expires_at").map(String::from),
+            }),
+        ))
     }
 
     pub fn config(&self) -> &AiConfig {
@@ -368,13 +499,13 @@ impl Server {
            "description":format!("Compose and send a new email from an account.{confirm_note}"),
            "inputSchema":{"type":"object","required":["accountId","to","subject","body"],"properties":{
               "accountId":{"type":"integer"},"to":addr,"cc":addr,"bcc":addr,
-              "subject":{"type":"string"},"body":{"type":"string","description":"Plain text body"},"attachments":{"type":"array","maxItems":32,"items":{"type":"string"},"description":"Absolute local file paths; max 25 MiB combined"}}}},
+              "subject":{"type":"string"},"body":{"type":"string","description":"Plain text body"},"attachments":{"type":"array","maxItems":32,"items":{"type":"string"},"description":"Absolute local file paths; cloud mode supports up to 2 GiB combined"},"attachments_as_link":{"type":"boolean"},"provider":{"type":"string","enum":["google_drive","one_drive","dropbox"]},"storage_account_id":{"type":"integer"},"expires_at":{"type":"string","description":"Optional RFC3339 expiry; not supported for Google anyone links"}}}},
           {"name":"reply_message",
            "description":format!("Reply (or reply-all) to a message, quoting the original.{confirm_note}"),
            "inputSchema":{"type":"object","required":["messageId","body"],"properties":{
               "messageId":{"type":"integer"},"body":{"type":"string"},
               "replyAll":{"type":"boolean"},"quoteOriginal":{"type":"boolean","description":"Default true"},
-              "extraCc":addr,"attachments":{"type":"array","maxItems":32,"items":{"type":"string"},"description":"Absolute local file paths; max 25 MiB combined"}}}},
+              "extraCc":addr,"attachments":{"type":"array","maxItems":32,"items":{"type":"string"},"description":"Absolute local file paths; cloud mode supports up to 2 GiB combined"},"attachments_as_link":{"type":"boolean"},"provider":{"type":"string","enum":["google_drive","one_drive","dropbox"]},"storage_account_id":{"type":"integer"},"expires_at":{"type":"string","description":"Optional RFC3339 expiry; not supported for Google anyone links"}}}},
           {"name":"delete_message",
            "description":format!("Move messages to Trash (or delete permanently if allowed in settings).{confirm_note}"),
            "inputSchema":{"type":"object","required":["messageIds"],"properties":{
@@ -442,7 +573,11 @@ impl Server {
             }
             "list_pending_actions" => Ok(json!(self.pending_actions().await)),
             "confirm_action" => {
-                if self.embedded && !self.config.allow_mcp_confirmation {
+                if self
+                    .requires_app_approval(req_str(args, "pendingId")?)
+                    .await
+                    || (self.embedded && !self.config.allow_mcp_confirmation)
+                {
                     bail!("Approve this action in the desktop app (allow_mcp_confirmation=false)");
                 }
                 self.confirm(req_str(args, "pendingId")?).await
@@ -588,6 +723,10 @@ impl Server {
     }
 
     async fn stage_or_send(&self, draft: SaveDraftArgs, kind_label: &str) -> Result<Value> {
+        let mut attachment_summary = Vec::new();
+        for a in &draft.attachments {
+            attachment_summary.push(json!({"filename":a.filename,"mimeType":attachments::mime_type(&a.filename),"size":tokio::fs::metadata(&a.file_path).await?.len(),"sourcePath":a.file_path}));
+        }
         let mut summary = json!({
             "action": kind_label,
             "accountId": draft.account_id,
@@ -596,7 +735,7 @@ impl Server {
             "bcc": draft.bcc.iter().map(format_address).collect::<Vec<_>>(),
             "subject": draft.subject,
             "body": draft.body_text,
-            "attachments": draft.attachments.iter().map(|a| json!({"filename":a.filename, "mimeType":attachments::mime_type(&a.filename)})).collect::<Vec<_>>(),
+            "attachments": attachment_summary,
         });
         if draft.to.is_empty() && draft.cc.is_empty() && draft.bcc.is_empty() {
             bail!("the message has no recipients");
@@ -632,6 +771,9 @@ impl Server {
     }
 
     async fn send_message(&self, args: &Value) -> Result<Value> {
+        let (attachments, cloud) = self
+            .prepare_attachments(args, req_i64(args, "accountId")?)
+            .await?;
         let draft = SaveDraftArgs {
             draft_id: None,
             account_id: req_i64(args, "accountId")?,
@@ -645,9 +787,13 @@ impl Server {
             mode: "new".into(),
             in_reply_to_message_id: None,
             in_reply_to_header: None,
-            attachments: attachments::validate(args.get("attachments")).await?,
+            attachments,
         };
-        self.stage_or_send(draft, "send").await
+        if let Some(options) = cloud {
+            self.stage_cloud_draft(draft, options).await
+        } else {
+            self.stage_or_send(draft, "send").await
+        }
     }
 
     async fn reply_message(&self, args: &Value) -> Result<Value> {
@@ -671,6 +817,7 @@ impl Server {
                 .unwrap_or_else(|| original.snippet.clone());
             body.push_str(&quote_body(&original.from, original.date, &text));
         }
+        let (attachments, cloud) = self.prepare_attachments(args, original.account_id).await?;
         let draft = SaveDraftArgs {
             draft_id: None,
             account_id: original.account_id,
@@ -688,10 +835,14 @@ impl Server {
             },
             in_reply_to_message_id: Some(id),
             in_reply_to_header: None,
-            attachments: attachments::validate(args.get("attachments")).await?,
+            attachments,
         };
-        self.stage_or_send(draft, if all { "reply_all" } else { "reply" })
-            .await
+        if let Some(options) = cloud {
+            self.stage_cloud_draft(draft, options).await
+        } else {
+            self.stage_or_send(draft, if all { "reply_all" } else { "reply" })
+                .await
+        }
     }
 
     async fn delete_message(&self, args: &Value) -> Result<Value> {
@@ -754,6 +905,96 @@ impl Server {
     async fn confirm(&self, id: &str) -> Result<Value> {
         let p = self.take_pending(id).await?;
         match p.kind {
+            PendingKind::Cloud {
+                draft_id,
+                snapshot,
+                files,
+                options,
+            } => {
+                let mut draft = self.core.get_draft(draft_id).await?;
+                if serde_json::to_value(&draft)? != snapshot {
+                    bail!("Draft changed; request a new cloud-link review");
+                }
+                // Resolve credentials ONLY after app approval. No browser, upload
+                // or anonymous sharing can happen while a proposal is staged.
+                for file in &files.files {
+                    cloud_links::verify(file).await?;
+                }
+                let provider = match &self.storage_override {
+                    Some(p) => p.clone(),
+                    None => self.core.cloud_provider(&options).await?,
+                };
+                if provider.provider() != options.provider {
+                    bail!("Storage provider does not match the approved plan");
+                }
+                let mut links = Vec::new();
+                let mut created = Vec::new();
+                for file in &files.files {
+                    let progress = self.cloud_progress.clone();
+                    let name = file.name.clone();
+                    let label = options.provider.label();
+                    let callback: cloud_links::Progress = Arc::new(move |done, total| {
+                        *progress
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                            json!({"filename":name,"provider":label,"done":done,"total":total});
+                    });
+                    let result = async {
+                        let uploaded = provider.upload(file, callback).await?;
+                        created.push(uploaded.id.clone());
+                        provider
+                            .share(&uploaded, options.expires_at.as_deref())
+                            .await
+                    }
+                    .await;
+                    match result {
+                        Ok(link) => links.push(link),
+                        Err(error) => {
+                            let mut cleanup_failed = false;
+                            for id in &created {
+                                cleanup_failed |= provider.delete(id).await.is_err();
+                            }
+                            *self
+                                .cloud_progress
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner) = json!({});
+                            bail!(
+                                "Cloud upload/share failed: {error}. No email was queued. Cleanup incomplete: {cleanup_failed}; inspect cloud storage before retrying."
+                            );
+                        }
+                    }
+                }
+                let current = self.core.get_draft(draft_id).await;
+                if current
+                    .as_ref()
+                    .ok()
+                    .and_then(|d| serde_json::to_value(d).ok())
+                    .as_ref()
+                    != Some(&snapshot)
+                {
+                    let mut cleanup_failed = false;
+                    for id in &created {
+                        cleanup_failed |= provider.delete(id).await.is_err();
+                    }
+                    bail!(
+                        "Draft changed during upload; no email was queued. Request a fresh review. Cleanup incomplete: {cleanup_failed}"
+                    );
+                }
+                cloud_links::insert_links(&mut draft, &links)?;
+                self.core.save_draft(draft).await?;
+                let sent = self
+                    .core
+                    .queue_send(QueueSendArgs {
+                        draft_id,
+                        send_at: None,
+                    })
+                    .await?;
+                *self
+                    .cloud_progress
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = json!({});
+                Ok(json!({"status":"queued","actionId":sent.action_id,"links":links}))
+            }
             PendingKind::Send { draft_id, snapshot } => {
                 let current = serde_json::to_value(self.core.get_draft(draft_id).await?)?;
                 if current != snapshot {
@@ -779,7 +1020,7 @@ impl Server {
 
     async fn cancel(&self, id: &str) -> Result<Value> {
         let p = self.take_pending(id).await?;
-        if let PendingKind::Send { draft_id, .. } = p.kind {
+        if let PendingKind::Send { draft_id, .. } | PendingKind::Cloud { draft_id, .. } = p.kind {
             self.core.delete_draft(draft_id).await?;
         }
         Ok(json!({"status": "cancelled", "summary": p.summary}))

@@ -328,3 +328,326 @@ async fn unlocked_profile_ignores_stale_discovery_without_leaking_token() {
             .is_err()
     );
 }
+
+#[derive(Clone)]
+struct FakeStorage {
+    calls: Arc<std::sync::Mutex<Vec<String>>>,
+    fail_share: bool,
+}
+#[async_trait::async_trait]
+impl flectar_mail_core::cloud_links::StorageProvider for FakeStorage {
+    fn provider(&self) -> flectar_mail_core::cloud_links::CloudProvider {
+        flectar_mail_core::cloud_links::CloudProvider::GoogleDrive
+    }
+    async fn upload(
+        &self,
+        file: &flectar_mail_core::cloud_links::CloudFile,
+        progress: flectar_mail_core::cloud_links::Progress,
+    ) -> flectar_mail_core::error::Result<flectar_mail_core::cloud_links::UploadedFile> {
+        flectar_mail_core::cloud_links::verify(file).await?;
+        let bytes = tokio::fs::read_to_string(&file.path).await?;
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("upload:{}:{bytes}", file.name));
+        progress(file.size, file.size);
+        Ok(flectar_mail_core::cloud_links::UploadedFile {
+            id: "NEW-ONLY".into(),
+            name: file.name.clone(),
+            size: file.size,
+        })
+    }
+    async fn share(
+        &self,
+        file: &flectar_mail_core::cloud_links::UploadedFile,
+        expiry: Option<&str>,
+    ) -> flectar_mail_core::error::Result<flectar_mail_core::cloud_links::SharedFile> {
+        self.calls.lock().unwrap().push("share:anyone:view".into());
+        if self.fail_share {
+            return Err(flectar_mail_core::error::CoreError::Other(
+                "Synthetic permission denied".into(),
+            ));
+        }
+        Ok(flectar_mail_core::cloud_links::SharedFile {
+            id: file.id.clone(),
+            name: file.name.clone(),
+            size: file.size,
+            provider: self.provider(),
+            url: "https://example.invalid/download?synthetic=true".into(),
+            expires_at: expiry.map(String::from),
+        })
+    }
+    async fn delete(&self, id: &str) -> flectar_mail_core::error::Result<()> {
+        self.calls.lock().unwrap().push(format!("delete:{id}"));
+        Ok(())
+    }
+}
+fn cloud_args(path: &std::path::Path) -> Value {
+    let mut args = send_args(path);
+    args["attachments_as_link"] = json!(true);
+    args["provider"] = json!("google_drive");
+    args
+}
+#[tokio::test]
+async fn cloud_upload_requires_app_even_if_mcp_confirmation_setting_enabled() {
+    let (server, core, dir) = fixture(AiConfig {
+        allow_mcp_confirmation: true,
+        ..Default::default()
+    })
+    .await;
+    let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let server = server.with_storage_provider(Arc::new(FakeStorage {
+        calls: calls.clone(),
+        fail_share: false,
+    }));
+    let path = dir.path().join("large-report.txt");
+    tokio::fs::write(&path, "approved-original").await.unwrap();
+    let staged = server
+        .call_tool("send_message", &cloud_args(&path))
+        .await
+        .unwrap();
+    assert!(calls.lock().unwrap().is_empty());
+    assert_eq!(staged["summary"]["provider"], "Google Drive");
+    assert_eq!(staged["summary"]["anyoneWithLink"], true);
+    let id = staged["pendingId"].as_str().unwrap();
+    assert!(
+        server
+            .call_tool("confirm_action", &json!({"pendingId":id}))
+            .await
+            .is_err()
+    );
+    assert!(calls.lock().unwrap().is_empty());
+    tokio::fs::write(&path, "unapproved-change").await.unwrap();
+    let result = server.approve_in_app(id).await.unwrap();
+    assert_eq!(result["status"], "queued");
+    {
+        let calls = calls.lock().unwrap();
+        assert!(calls[0].ends_with(":approved-original"));
+        assert_eq!(calls[1], "share:anyone:view");
+    }
+    let draft = core
+        .get_draft(staged["draftId"].as_i64().unwrap())
+        .await
+        .unwrap();
+    assert!(draft.attachments.is_empty());
+    assert!(
+        draft
+            .body_text
+            .contains("https://example.invalid/download?synthetic=true")
+    );
+    assert!(draft.body_html.unwrap().contains("href="));
+    assert!(
+        std::fs::read_dir(dir.path().join("cloud-pending"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}
+#[tokio::test]
+async fn cloud_cancel_removes_private_copies_without_upload() {
+    let (server, _core, dir) = fixture(AiConfig::default()).await;
+    let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let server = server.with_storage_provider(Arc::new(FakeStorage {
+        calls: calls.clone(),
+        fail_share: false,
+    }));
+    let path = dir.path().join("cancel.txt");
+    tokio::fs::write(&path, "test").await.unwrap();
+    let staged = server
+        .call_tool("send_message", &cloud_args(&path))
+        .await
+        .unwrap();
+    server
+        .cancel_in_app(staged["pendingId"].as_str().unwrap())
+        .await
+        .unwrap();
+    assert!(calls.lock().unwrap().is_empty());
+    assert!(
+        std::fs::read_dir(dir.path().join("cloud-pending"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}
+#[tokio::test]
+async fn cloud_permission_failure_never_queues_mail_and_cleans_only_new_files() {
+    let (server, core, dir) = fixture(AiConfig::default()).await;
+    let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let server = server.with_storage_provider(Arc::new(FakeStorage {
+        calls: calls.clone(),
+        fail_share: true,
+    }));
+    let path = dir.path().join("blocked.txt");
+    tokio::fs::write(&path, "test").await.unwrap();
+    let staged = server
+        .call_tool("send_message", &cloud_args(&path))
+        .await
+        .unwrap();
+    let error = server
+        .approve_in_app(staged["pendingId"].as_str().unwrap())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("No email was queued"));
+    assert_eq!(calls.lock().unwrap().last().unwrap(), "delete:NEW-ONLY");
+    let count = core
+        .db
+        .read(|conn| {
+            Ok(conn.query_row(
+                "SELECT COUNT(*) FROM pending_actions WHERE kind='send'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )?)
+        })
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+#[tokio::test]
+async fn cloud_edited_draft_requires_new_review_without_upload() {
+    let (server, core, dir) = fixture(AiConfig::default()).await;
+    let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let server = server.with_storage_provider(Arc::new(FakeStorage {
+        calls: calls.clone(),
+        fail_share: false,
+    }));
+    let path = dir.path().join("draft.txt");
+    tokio::fs::write(&path, "test").await.unwrap();
+    let staged = server
+        .call_tool("send_message", &cloud_args(&path))
+        .await
+        .unwrap();
+    let mut draft = core
+        .get_draft(staged["draftId"].as_i64().unwrap())
+        .await
+        .unwrap();
+    draft.subject = "Unapproved".into();
+    core.save_draft(draft).await.unwrap();
+    assert!(
+        server
+            .approve_in_app(staged["pendingId"].as_str().unwrap())
+            .await
+            .is_err()
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn account_limit_auto_fallback_is_explicitly_opt_in() {
+    let (server, _core, dir) = fixture(AiConfig::default()).await;
+    let path = dir.path().join("over.txt");
+    tokio::fs::write(&path, "test").await.unwrap();
+    let config = dir.path().join("cloud-links.json");
+    tokio::fs::write(&config, r#"{"account_limits":{"1":2}}"#)
+        .await
+        .unwrap();
+    assert!(
+        server
+            .call_tool("send_message", &send_args(&path))
+            .await
+            .is_err()
+    );
+    tokio::fs::write(
+        &config,
+        r#"{"account_limits":{"1":2},"auto_link_over_limit":true,"default_provider":"dropbox"}"#,
+    )
+    .await
+    .unwrap();
+    let staged = server
+        .call_tool("send_message", &send_args(&path))
+        .await
+        .unwrap();
+    assert_eq!(staged["summary"]["provider"], "Dropbox");
+    assert_eq!(staged["status"], "pending_confirmation");
+    server
+        .cancel_in_app(staged["pendingId"].as_str().unwrap())
+        .await
+        .unwrap();
+}
+#[tokio::test]
+async fn cloud_more_than_25_mib_stages_but_never_uploads_before_approval() {
+    let (server, core, dir) = fixture(AiConfig::default()).await;
+    let path = dir.path().join("large.bin");
+    let file = tokio::fs::File::create(&path).await.unwrap();
+    file.set_len(26 * 1024 * 1024).await.unwrap();
+    drop(file);
+    let staged = server
+        .call_tool("send_message", &cloud_args(&path))
+        .await
+        .unwrap();
+    assert_eq!(staged["summary"]["files"][0]["size"], 26 * 1024 * 1024);
+    assert!(
+        core.get_draft(staged["draftId"].as_i64().unwrap())
+            .await
+            .unwrap()
+            .attachments
+            .is_empty()
+    );
+    server
+        .cancel_in_app(staged["pendingId"].as_str().unwrap())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn reply_cloud_preserves_thread_quote_and_approval_gate() {
+    use flectar_mail_core::models::{Address, SaveDraftArgs};
+    let (server, core, dir) = fixture(AiConfig::default()).await;
+    let original = core
+        .save_draft(SaveDraftArgs {
+            draft_id: None,
+            account_id: 1,
+            from: None,
+            to: vec![Address {
+                name: None,
+                email: "recipient@example.invalid".into(),
+            }],
+            cc: vec![],
+            bcc: vec![],
+            subject: "Original subject".into(),
+            body_text: "Original quoted body".into(),
+            body_html: None,
+            mode: "new".into(),
+            in_reply_to_message_id: None,
+            in_reply_to_header: None,
+            attachments: vec![],
+        })
+        .await
+        .unwrap();
+    let path = dir.path().join("reply.txt");
+    tokio::fs::write(&path, "synthetic reply file")
+        .await
+        .unwrap();
+    let staged=server.call_tool("reply_message",&json!({"messageId":original,"body":"Reply with a link","attachments":[path],"attachments_as_link":true,"provider":"one_drive","storage_account_id":1})).await.unwrap();
+    let draft = core
+        .get_draft(staged["draftId"].as_i64().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(draft.in_reply_to_message_id, Some(original));
+    assert_eq!(draft.subject, "Re: Original subject");
+    assert!(draft.body_text.contains("Original quoted body"));
+    assert_eq!(staged["summary"]["provider"], "OneDrive");
+    server
+        .cancel_in_app(staged["pendingId"].as_str().unwrap())
+        .await
+        .unwrap();
+}
+#[tokio::test]
+async fn standalone_cannot_stage_or_approve_cloud_even_with_confirmation_disabled() {
+    let (_embedded, core, dir) = fixture(AiConfig::default()).await;
+    let server = Server::new(
+        core,
+        AiConfig {
+            ai_actions_require_confirmation: false,
+            allow_mcp_confirmation: true,
+            ..Default::default()
+        },
+    );
+    let path = dir.path().join("headless.txt");
+    tokio::fs::write(&path, "test").await.unwrap();
+    let error = server
+        .call_tool("send_message", &cloud_args(&path))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("desktop app"));
+    assert!(server.pending_actions().await.is_empty());
+    assert!(!dir.path().join("cloud-pending").exists());
+}

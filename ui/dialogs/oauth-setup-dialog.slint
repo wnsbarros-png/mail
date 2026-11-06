@@ -15,6 +15,7 @@ export component OAuthSetupDialog inherits Rectangle {
     in property <string> google-client-secret;
     in property <string> ms-client-id;
     callback save(string, string, string);
+    callback cloud-settings;
     in property <bool> saving: false;
     in-out property <string> save-error: "";
     private property <bool> google: true;
@@ -57,6 +58,7 @@ export component OAuthSetupDialog inherits Rectangle {
             VerticalBox {
                 padding: 24px;
                 spacing: 16px;
+                Button {text: @tr("Cloud sign-in settings"); clicked => {root.cloud-settings();}}
                 Text { text: @tr("Sign-in settings"); color: AppTheme.heading; font-size: TypeScale.title-large; font-weight: 600; }
                 Text {
                     text: @tr("Use your own OAuth app registration for Gmail or Outlook.");

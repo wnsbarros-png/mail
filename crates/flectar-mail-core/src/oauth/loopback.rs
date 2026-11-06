@@ -33,12 +33,17 @@ impl std::fmt::Debug for AuthCode {
 
 impl LoopbackServer {
     pub async fn bind() -> Result<Self> {
+        Self::bind_port(0).await
+    }
+
+    /// Fixed loopback port for providers requiring an exact registered redirect.
+    pub async fn bind_port(requested_port: u16) -> Result<Self> {
         // Bind IPv4 loopback on an ephemeral port first, then try to grab the
         // same port on IPv6 loopback. `localhost` may resolve to either 127.0.0.1
         // or ::1 depending on the OS/browser, so we must listen on both to
         // reliably catch the redirect. IPv6 is best-effort: if it (or the port)
         // is unavailable we fall back to IPv4-only.
-        let v4 = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let v4 = TcpListener::bind((Ipv4Addr::LOCALHOST, requested_port)).await?;
         let port = v4.local_addr()?.port();
         let v6 = TcpListener::bind((Ipv6Addr::LOCALHOST, port)).await.ok();
         tracing::debug!(

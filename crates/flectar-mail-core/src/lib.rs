@@ -8,6 +8,7 @@ pub mod autolabel;
 pub mod caldav;
 pub mod calendar;
 pub mod carddav;
+pub mod cloud_links;
 pub mod config;
 pub mod db;
 pub mod embed;
@@ -7082,7 +7083,8 @@ impl Core {
 
     pub async fn set_ai_key(&self, api_key: String) -> Result<()> {
         if api_key.trim().is_empty() {
-            credentials::delete_all_async(self.credentials.clone(), 0).await?;
+            // Other profile-level credentials (e.g. Dropbox) are independent.
+            credentials::delete_async(self.credentials.clone(), 0, Slot::AiApiKey).await?;
             return Ok(());
         }
         credentials::store_async(

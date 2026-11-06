@@ -311,6 +311,11 @@ pub(super) fn format_file_size(size: u64) -> String {
 }
 
 pub(super) fn apply_compose_files(app: &AppWindow, files: &[ComposeFile]) {
+    if files.is_empty() {
+        app.set_compose_cloud_provider("".into());
+        app.set_compose_cloud_account("".into());
+        app.set_compose_cloud_expiry("".into());
+    }
     let rows = files
         .iter()
         .map(|file| {
@@ -328,6 +333,7 @@ pub(super) fn apply_compose_files(app: &AppWindow, files: &[ComposeFile]) {
         })
         .collect::<Vec<_>>();
     let total = files.iter().map(|file| file.size).sum::<u64>();
+    app.set_compose_total_attachment_bytes(total as f32);
     app.set_compose_attachments(ModelRc::new(VecModel::from(rows)));
     app.set_compose_attachment_summary(
         if files.is_empty() {
@@ -502,7 +508,9 @@ pub(super) fn contact_initials(contact: &flectar_mail_core::models::Address) -> 
 }
 
 pub(super) fn compose_recipient_query(recipients: &str) -> String {
-    let token_start = recipients.rfind([',', ';', '\n']).map_or(0, |index| index + 1);
+    let token_start = recipients
+        .rfind([',', ';', '\n'])
+        .map_or(0, |index| index + 1);
     recipients[token_start..].trim().to_owned()
 }
 
@@ -516,7 +524,9 @@ pub(super) fn complete_compose_recipient(
     {
         return recipients.to_owned();
     }
-    let token_start = recipients.rfind([',', ';', '\n']).map_or(0, |index| index + 1);
+    let token_start = recipients
+        .rfind([',', ';', '\n'])
+        .map_or(0, |index| index + 1);
     let prefix = recipients[..token_start].trim_end();
     let clean_name = contact
         .name
@@ -669,7 +679,9 @@ mod tests {
     #[test]
     fn replies_use_wildcard_and_subaddress_matches_and_exclude_them_from_reply_all() {
         let mut source = source();
-        source.sender_identities.push(identity("*@team.example", false, false));
+        source
+            .sender_identities
+            .push(identity("*@team.example", false, false));
         source.to = vec![
             address("Support", "support@team.example"),
             address("Alex", "alex+launch@example.com"),
@@ -789,9 +801,6 @@ mod tests {
             "ada@example.com\ngr",
             &address("Grace", "grace@example.com"),
         );
-        assert_eq!(
-            completed,
-            "ada@example.com, Grace <grace@example.com>, "
-        );
+        assert_eq!(completed, "ada@example.com, Grace <grace@example.com>, ");
     }
 }

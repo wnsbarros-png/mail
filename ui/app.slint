@@ -1,3 +1,4 @@
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 export { AccountMailPreferences, SignatureChoice } from "components/account-mail-preferences.slint";
 import { OpenPgpReader } from "components/account-mail-preferences.slint";
 import { MailAttachments } from "models.slint";
@@ -20,6 +21,7 @@ import { TypeScale } from "typography.slint";
 export { AppTheme, MotionSettings, ThemeUtilities } from "design-system.slint";
 import { AppTheme, LayoutMetrics } from "design-system.slint";
 import { Button } from "components/button.slint";
+import { LineEdit } from "components/controls.slint";
 import { LoadingSkeletonBlock } from "components/loading-skeleton.slint";
 import { AccountRow, CalendarAgendaRow, CalendarAgendaFilterRow, CalendarDay, CalendarEventRow, CalendarSourceRow, CalendarWeekDay, ComposeAttachment, ComposeContact, ComposeEditorTile, ContactSidebarRow, ContactRow, ContactSyncState, ContactValueRow, EmailLink, EmailRow, EmailTemplateRow, EmailTile, LocalizedMessage, MailListEntry, MailProfileRow, ProfileMemberRow, SidebarRow, MailLabelRow, StorageUsageRow, ThreadMessageRow } from "models.slint";
 export { EmailReader, ReaderCaret, ReaderImage, ReaderItem, MailDragApi } from "models.slint";
@@ -530,6 +532,12 @@ export global I18n {
     }
 
     ui-message-compose(key, argument, second-argument, third-argument) => {
+        if (key == "Attachments exceed the account limit. Choose a cloud provider.") { return @tr("Attachments exceed the account limit. Choose a cloud provider."); }
+        if (key == "Preparing files for approval. Nothing has been uploaded.") { return @tr("Preparing files for approval. Nothing has been uploaded."); }
+        if (key == "Review the cloud upload in the approval panel.") { return @tr("Review the cloud upload in the approval panel."); }
+        if (key == "Choose a valid storage account ID.") { return @tr("Choose a valid storage account ID."); }
+        if (key == "Enter valid recipient addresses.") { return @tr("Enter valid recipient addresses."); }
+        if (key == "Attachments added: {}. Skipped: {} (duplicate, unreadable, or over the 2 GiB selection limit).") { return @tr("Attachments added: {}. Skipped: {} (duplicate, unreadable, or over the 2 GiB selection limit)." , argument, second-argument); }
         // Reply and forward quotation headers, written into the draft.
         if (key == "On {}, {} wrote:") { return @tr("On {}, {} wrote:", argument, second-argument); }
         if (key == "{} wrote:") { return @tr("{} wrote:", argument); }
@@ -764,6 +772,17 @@ export component AppWindow inherits Window {
     callback load-more-contacts();
     callback system-back-requested() -> bool;
     callback retry-startup();
+    in-out property <string> compose-cloud-provider;
+    in-out property <string> compose-cloud-account;
+    in-out property <string> compose-cloud-expiry;
+    in property <float> compose-cloud-limit: 26214400;
+    in property <float> compose-total-attachment-bytes;
+    in-out property <bool> cloud-settings-open;
+    in-out property <bool> cloud-auth-busy;
+    in-out property <string> cloud-auth-status;
+    in-out property <string> dropbox-app-key;
+    in-out property <string> cloud-auth-account;
+    callback cloud-connect(string,string,string);
     in-out property <string> ai-pending-id;
     in-out property <string> ai-pending-summary;
     in-out property <int> ai-pending-count;
@@ -2156,6 +2175,11 @@ export component AppWindow inherits Window {
             compose_attachments: root.compose_attachments;
             compose_templates: root.compose_templates;
             compose_attachment_summary: root.compose_attachment_summary;
+            cloud-provider <=> root.compose-cloud-provider;
+            cloud-account <=> root.compose-cloud-account;
+            cloud-expiry <=> root.compose-cloud-expiry;
+            cloud-required: root.compose-total-attachment-bytes > root.compose-cloud-limit;
+            cloud-settings => {root.cloud-settings-open = true;}
             compose_from_label <=> root.compose_from_label;
             compose_notice: root.compose_notice;
             compose_notice_is_error: root.compose_notice_is_error;
@@ -2352,6 +2376,7 @@ export component AppWindow inherits Window {
         google-client-secret: root.google_client_secret;
         ms-client-id: root.ms_client_id;
         oauth-setup-open <=> root.oauth_setup_open;
+        cloud-settings => {root.cloud-settings-open = true;}
         save-oauth-apps(google-id, google-secret, microsoft-id) => {
             root.save_oauth_apps(google-id, google-secret, microsoft-id);
         }
@@ -2393,6 +2418,31 @@ export component AppWindow inherits Window {
         import-accounts => { root.import_accounts(); }
     }
 
+    if root.cloud-settings-open : Rectangle {
+        z: 19000; width: parent.width; height: parent.height; background: #00000088;
+        TouchArea {}
+        Rectangle {
+            width: min(640px,parent.width - 24px); height: min(520px,parent.height - 24px);
+            x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+            background: root.surface; border-radius: 12px;
+            VerticalBox {
+                padding: 24px; spacing: 12px;
+                Text {text: @tr("Cloud sign-in settings"); color: root.body-text; font-size: 20px;}
+                Text {text: @tr("Use an existing Gmail/Microsoft account ID. Dropbox uses its own public app key. Tokens stay in the OS keyring."); color: root.body-text; wrap: word-wrap;}
+                LineEdit {text <=> root.cloud-auth-account; placeholder-text: @tr("Storage account ID (Google/Microsoft)"); enabled: !root.cloud-auth-busy;}
+                LineEdit {text <=> root.dropbox-app-key; placeholder-text: @tr("Dropbox app key (public, no secret)"); enabled: !root.cloud-auth-busy;}
+                Button {text: @tr("Save Dropbox app key"); enabled: !root.cloud-auth-busy; clicked => {root.cloud-connect("save", root.cloud-auth-account,root.dropbox-app-key);}}
+                HorizontalBox {
+                    Button {text: @tr("Connect Google Drive"); enabled: !root.cloud-auth-busy; clicked => {root.cloud-connect("google_drive",root.cloud-auth-account,root.dropbox-app-key);}}
+                    Button {text: @tr("Connect OneDrive"); enabled: !root.cloud-auth-busy; clicked => {root.cloud-connect("one_drive",root.cloud-auth-account,root.dropbox-app-key);}}
+                    Button {text: @tr("Connect Dropbox"); enabled: !root.cloud-auth-busy; clicked => {root.cloud-connect("dropbox",root.cloud-auth-account,root.dropbox-app-key);}}
+                }
+                Text {text: root.cloud-auth-status; color: root.body-text; wrap: word-wrap;}
+                Button {text: @tr("Close"); enabled: !root.cloud-auth-busy; clicked => {root.cloud-settings-open = false;}}
+            }
+        }
+    }
+
     // Local MCP proposals are reviewed here, never by an email's contents.
     if root.ai-pending-count > 0 || root.ai-review-status != "" : Rectangle {
         x: root.content-x + root.content-width - self.width - 12px;
@@ -2426,6 +2476,7 @@ export component AppWindow inherits Window {
                 Text {
                     width: parent.width;
                     text: root.ai-pending-summary;
+                    font-family: "sans-serif";
                     wrap: word-wrap;
                     color: root.body-text;
                 }

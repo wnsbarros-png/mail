@@ -46,3 +46,69 @@ msgstr "Russo"
 msgid "Automatic"
 msgstr "Automático"
 
+
+msgid "Cloud sign-in settings"
+msgstr "Configurações de login na nuvem"
+
+msgid "Attachments exceed the account limit. Choose a cloud provider."
+msgstr "Os anexos excedem o limite da conta. Escolha um provedor de nuvem."
+
+msgid "Send attachments as cloud links (optional)"
+msgstr "Enviar anexos como links da nuvem (opcional)"
+
+msgid "Send as link: Google Drive"
+msgstr "Enviar como link: Google Drive"
+
+msgid "Send as link: OneDrive"
+msgstr "Enviar como link: OneDrive"
+
+msgid "Send as link: Dropbox"
+msgstr "Enviar como link: Dropbox"
+
+msgid "Storage account ID (Google/Microsoft)"
+msgstr "ID da conta de armazenamento (Google/Microsoft)"
+
+msgid "Expiry RFC3339 (optional, except Drive)"
+msgstr "Expiração RFC3339 (opcional, exceto Drive)"
+
+msgid "Use normal attachments"
+msgstr "Usar anexos normais"
+
+msgid "Files upload only after approval in the app. Anyone with the link can download."
+msgstr "Os arquivos serão enviados somente após aprovação no aplicativo. Qualquer pessoa com o link poderá baixar."
+
+msgid "Use an existing Gmail/Microsoft account ID. Dropbox uses its own public app key. Tokens stay in the OS keyring."
+msgstr "Use o ID de uma conta Gmail/Microsoft existente. O Dropbox usa sua própria chave pública de aplicativo. Os tokens ficam no chaveiro do sistema."
+
+msgid "Dropbox app key (public, no secret)"
+msgstr "Chave do aplicativo Dropbox (pública, sem segredo)"
+
+msgid "Save Dropbox app key"
+msgstr "Salvar chave do aplicativo Dropbox"
+
+msgid "Connect Google Drive"
+msgstr "Conectar Google Drive"
+
+msgid "Connect OneDrive"
+msgstr "Conectar OneDrive"
+
+msgid "Connect Dropbox"
+msgstr "Conectar Dropbox"
+
+msgid "Preparing files for approval. Nothing has been uploaded."
+msgstr "Preparando arquivos para aprovação. Nenhum anexo foi enviado para a nuvem."
+
+msgid "Review the cloud upload in the approval panel."
+msgstr "Revise o envio para a nuvem no painel de aprovação."
+
+msgid "Choose a valid storage account ID."
+msgstr "Escolha um ID válido de conta de armazenamento."
+
+msgid "Enter valid recipient addresses."
+msgstr "Informe endereços válidos dos destinatários."
+
+msgid "Attachments added: {}. Skipped: {} (duplicate, unreadable, or over the 2 GiB selection limit)."
+msgstr "Anexos adicionados: {}. Ignorados: {} (duplicados, ilegíveis ou acima do limite de seleção de 2 GiB)."
+
+msgid "Sign-in settings"
+msgstr "Configurações de login"

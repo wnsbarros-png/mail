@@ -36,6 +36,13 @@ pub fn validate_filename(name: &str) -> Result<()> {
 }
 
 pub async fn validate(value: Option<&Value>) -> Result<Vec<DraftAttachmentIn>> {
+    validate_limit(value, MAX_BYTES).await
+}
+
+pub async fn validate_limit(
+    value: Option<&Value>,
+    max_bytes: u64,
+) -> Result<Vec<DraftAttachmentIn>> {
     let Some(value) = value else {
         return Ok(Vec::new());
     };
@@ -64,8 +71,8 @@ pub async fn validate(value: Option<&Value>) -> Result<Vec<DraftAttachmentIn>> {
         total = total
             .checked_add(metadata.len())
             .context("attachment size overflow")?;
-        if total > MAX_BYTES {
-            bail!("attachments exceed the combined 25 MiB limit");
+        if total > max_bytes {
+            bail!("attachments exceed the selected size limit");
         }
         let path = tokio::fs::canonicalize(path).await?;
         let filename = path

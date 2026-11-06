@@ -22,6 +22,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rand = "0.9"
 
 [dev-dependencies]
+async-trait = "0.1"
 tempfile = "3"
 
 # Linux build hosts without libdbus development files can build the Secret
