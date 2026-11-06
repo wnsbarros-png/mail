@@ -390,7 +390,7 @@ msgstr "Historique de conversation disponible"
 msgid "New address-book entry"
 msgstr "Nouvelle entrée dans le carnet d’adresses"
 
-#: ui/app.slint:179 ui/app.slint:1037 ui/components/composer-fields.slint:66
+#: ui/app.slint:179 ui/app.slint:1039 ui/components/composer-fields.slint:66
 #: ui/dialogs/compose-dialog.slint:37
 msgid "No connected account"
 msgstr "Aucun compte connecté"
@@ -2020,22 +2020,22 @@ msgstr "Chargement du message…"
 msgid "Flectar Mail"
 msgstr "Flectar Mail"
 
-#: ui/app.slint:1270 ui/app.slint:1283
+#: ui/app.slint:1272 ui/app.slint:1285
 #, fuzzy
 msgid "Global Labels (local only)"
 msgstr "Étiquettes globales (locales uniquement)"
 
-#: ui/app.slint:2222
+#: ui/app.slint:2224
 #, fuzzy
 msgid "Empty Trash?"
 msgstr "Vider la corbeille ?"
 
-#: ui/app.slint:2222 ui/views/files-view.slint:578
+#: ui/app.slint:2224 ui/views/files-view.slint:578
 #, fuzzy
 msgid "Delete permanently?"
 msgstr "Supprimer définitivement ?"
 
-#: ui/app.slint:2226
+#: ui/app.slint:2228
 #, fuzzy
 msgid ""
 "Permanently delete all messages in Trash across every connected account?"
@@ -2043,64 +2043,64 @@ msgstr ""
 "Supprimer définitivement tous les messages de la corbeille de tous les "
 "comptes connectés ?"
 
-#: ui/app.slint:2227
+#: ui/app.slint:2229
 #, fuzzy
 msgid "Permanently delete all messages in this account’s Trash?"
 msgstr ""
 "Supprimer définitivement tous les messages de la corbeille de ce compte ?"
 
-#: ui/app.slint:2229
+#: ui/app.slint:2231
 #, fuzzy
 msgid "Permanently delete the selected conversations from Trash?"
 msgstr ""
 "Supprimer définitivement les conversations sélectionnées dans la corbeille ?"
 
-#: ui/app.slint:2230
+#: ui/app.slint:2232
 #, fuzzy
 msgid "Permanently delete this conversation from Trash?"
 msgstr "Supprimer définitivement cette conversation de la corbeille ?"
 
-#: ui/app.slint:2231 ui/components/calendar.slint:947
+#: ui/app.slint:2233 ui/components/calendar.slint:947
 #, fuzzy
 msgid "This action cannot be undone."
 msgstr "Cette action est irréversible."
 
-#: ui/app.slint:2232
+#: ui/app.slint:2234
 #, fuzzy
 msgid "Empty Trash"
 msgstr "Vider la corbeille"
 
-#: ui/app.slint:2232 ui/views/files-view.slint:660
+#: ui/app.slint:2234 ui/views/files-view.slint:660
 #, fuzzy
 msgid "Delete permanently"
 msgstr "Supprimer définitivement"
 
-#: ui/app.slint:2406
+#: ui/app.slint:2408
 #, fuzzy
 msgid "Mailbox startup failed"
 msgstr "Échec de l’initialisation de la boîte aux lettres"
 
-#: ui/app.slint:2412
+#: ui/app.slint:2414
 #, fuzzy
 msgid "Flectar Mail could not open local storage"
 msgstr "Flectar Mail n’a pas pu ouvrir le stockage local"
 
-#: ui/app.slint:2425
+#: ui/app.slint:2427
 #, fuzzy
 msgid "Diagnostic ID: {}"
 msgstr "Identifiant de diagnostic : {}"
 
-#: ui/app.slint:2428
+#: ui/app.slint:2430
 #, fuzzy
 msgid "Diagnostic ID {}"
 msgstr "Identifiant de diagnostic {}"
 
-#: ui/app.slint:2433
+#: ui/app.slint:2435
 #, fuzzy
 msgid "Retry"
 msgstr "Réessayer"
 
-#: ui/app.slint:2441 ui/components/copyable-diagnostic.slint:43
+#: ui/app.slint:2443 ui/components/copyable-diagnostic.slint:43
 #, fuzzy
 msgid "Copy diagnostics"
 msgstr "Copier le diagnostic"
@@ -3177,25 +3177,35 @@ msgstr "Quel est l’objet de cet e-mail ?"
 msgid "Confirm"
 msgstr "Confirmer"
 
-#: ui/components/controls.slint:185
+#: ui/components/controls.slint:108
 #, fuzzy
 msgid "On"
 msgstr "Activé"
 
-#: ui/components/controls.slint:185 ui/dialogs/settings-dialog.slint:654
+#: ui/components/controls.slint:108 ui/dialogs/settings-dialog.slint:654
 #, fuzzy
 msgid "Off"
 msgstr "Désactivé"
 
-#: ui/components/controls.slint:233 ui/views/mail-list-pane.slint:694
+#: ui/components/controls.slint:156 ui/views/mail-list-pane.slint:694
 #, fuzzy
 msgid "Clear selection"
 msgstr "Effacer la sélection"
 
-#: ui/components/controls.slint:233
+#: ui/components/controls.slint:156
 #, fuzzy
 msgid "Select"
 msgstr "Sélectionner"
+
+#: ui/components/controls.slint:487
+#, fuzzy
+msgid "Hide password"
+msgstr "Mot de passe d’application"
+
+#: ui/components/controls.slint:487
+#, fuzzy
+msgid "Show password"
+msgstr "Mot de passe d’application"
 
 #: ui/components/document-preview.slint:17
 #, fuzzy
