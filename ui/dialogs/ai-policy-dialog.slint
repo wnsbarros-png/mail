@@ -41,7 +41,6 @@ export component AiPolicyDialog inherits Rectangle {
                 spacing: 16px;
                 ScrollView {
                     width: (parent.width - 16px)/2;
-                    min-width: 0px;
                     horizontal-scrollbar-policy: always-off;
                     horizontal-stretch: 1;
                     VerticalBox {
@@ -76,7 +75,6 @@ export component AiPolicyDialog inherits Rectangle {
                 }
                 VerticalBox {
                     width: (parent.width - 16px)/2;
-                    min-width: 0px;
                     horizontal-stretch: 1;
                     Text {text: @tr("Read-only action history (latest 200)"); color: AppTheme.heading; font-weight: 600;}
                     Text {text: @tr("Actor, action, local time, rule and result only. No message bodies, subjects, recipient addresses, file paths or credentials are logged."); color: AppTheme.secondary; wrap: word-wrap;}

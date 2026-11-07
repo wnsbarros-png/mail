@@ -337,10 +337,10 @@ e [Hostinger](https://docs.hostinger.com/emails/setup-devices).
 ### Validação desta fase
 
 Builds debug completos do desktop e `mail-mcp` em Linux, Rust 1.99.1.
-`cargo test -p flectar-mail-core -p mail-mcp`: **986 core + 29 MCP aprovados**;
-2 testes Stalwart ignorados. `cargo test -p flectar-mail`: **442 unitários +
-30 de interface/integração aprovados**, 7 ignorados. O teste ignorado de captura
-do painel foi executado separadamente e passou. `cargo fmt --all --check` e
+`cargo test -p flectar-mail-core -p mail-mcp`: **986 core + 57 MCP aprovados**;
+2 testes Stalwart ignorados. `cargo test -p flectar-mail`: **444 unitários +
+30 de interface/integração aprovados**, 8 ignorados. O teste ignorado da captura
+da tela de regras foi executado separadamente e passou. `cargo fmt --all --check` e
 `cargo clippy -p flectar-mail-core -p mail-mcp -p flectar-mail --all-targets -- -D warnings`
 passaram (também verificado rustfmt direto nos arquivos incluídos por `src/lib.rs`).
 Os novos provedores usam mocks HTTP locais; suítes dependentes de servidores
@@ -557,8 +557,8 @@ when bridging. Logs go to stderr, JSON-RPC only to stdout.
 ### Validation for this phase
 
 Full Linux debug desktop + MCP builds, Rust 1.99.1. Core/MCP suites: **986 core +
-29 MCP passing**, 2 Stalwart tests ignored. Full desktop suite: **442 unit +
-30 integration/UI passing**, 7 ignored; the ignored synthetic screenshot test
+57 MCP passing** (19 unit + 31 embedded + 7 tools), 2 Stalwart tests ignored. Full desktop suite: **444 unit +
+30 integration/UI passing**, 8 ignored; the ignored synthetic rules screenshot test
 was explicitly run separately and passed. Formatting checks (including direct
 rustfmt for files included via `src/lib.rs`) and all-targets clippy **`-D warnings`**
 passed for all three packages. New storage tests use mocked local HTTP.
