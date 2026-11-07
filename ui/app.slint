@@ -799,6 +799,7 @@ export component AppWindow inherits Window {
     in-out property <string> documents-status;
     in-out property <[DocumentRow]> documents-rows;
     callback documents-command(string);
+    callback documents-copy(string);
     in-out property <bool> followup-open;
     in-out property <string> followup-message;
     in-out property <string> followup-days: "3";
@@ -2505,9 +2506,9 @@ export component AppWindow inherits Window {
     }
 
     if root.documents-open: Rectangle {x:0;y:0;width:parent.width;height:parent.height;background:#0008;z:19615;
-        DocumentsDialog {x:max(12px,(parent.width-self.width)/2);y:24px;width:min(1000px,parent.width - 24px);height:parent.height - 48px;
+        DocumentsDialog {x:max(12px,(parent.width - self.width)/2);y:24px;width:min(1000px,parent.width - 24px);height:parent.height - 48px;
             rows:root.documents-rows;status:root.documents-status;busy:root.documents-busy;message:root.documents-message;
-            command(c)=>{root.documents-command(c);}copy(c)=>{root.clipboard_request=c;root.clipboard_request_id+=1;}close=>{root.documents-open=false;}
+            command(c)=>{root.documents-command(c);}copy(c)=>{root.documents-copy(c);}close=>{root.documents-open=false;}
         }
     }
     if root.followup-open: Rectangle {x:0;y:0;width:parent.width;height:parent.height;background:#0008;z:19610;

@@ -192,6 +192,13 @@ async fn run(
     Ok((tool, value.get("result").cloned().unwrap_or(value)))
 }
 pub(crate) fn register(app: &AppWindow, state: &Rc<RefCell<InboxState>>, runtime: &Handle) {
+    let clipboard = app.as_weak();
+    app.on_documents_copy(move |text| {
+        if let Some(app) = clipboard.upgrade() {
+            app.set_clipboard_request(text);
+            app.set_clipboard_request_id(app.get_clipboard_request_id().wrapping_add(1));
+        }
+    });
     let weak = app.as_weak();
     let state = Rc::downgrade(state);
     let handle = runtime.clone();
