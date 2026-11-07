@@ -92,6 +92,8 @@ pub struct Digest {
     pub counts: BTreeMap<Category, usize>,
     pub items: Vec<Item>,
     pub truncated: bool,
+    pub total_messages: usize,
+    pub details_truncated: bool,
 }
 impl Digest {
     pub fn text(&self) -> String {
@@ -106,8 +108,8 @@ impl Digest {
                 self.counts.get(&c).copied().unwrap_or_default()
             ));
         }
-        out.push_str("\n");
-        for i in &self.items {
+        out.push('\n');
+        for i in self.items.iter().take(200) {
             out.push_str(&format!(
                 "[{}] #{} · {}\n{}\n\n",
                 i.category.label(),
@@ -115,6 +117,9 @@ impl Digest {
                 safe(&i.sender),
                 safe(&i.subject)
             ));
+        }
+        if self.items.len() > 200 || self.details_truncated {
+            out.push_str("Primeiras 200 mensagens; filtre no aplicativo / First 200 messages; filter in the app.\n");
         }
         if self.truncated {
             out.push_str("Limite de 5000 mensagens; refine o período / 5000-message limit; narrow the range.\n");
@@ -266,8 +271,8 @@ impl Core {
         let (from, to) = range(&start, &end)?;
         self.triage_schema().await?;
         let mut items=self.db.read(move|c|{
- let sql="SELECT m.id,COALESCE(m.thread_id,0),m.account_id,substr(COALESCE(m.from_addr,''),1,512),substr(m.subject,1,1000),substr(m.snippet,1,1000),CASE WHEN m.date BETWEEN -99999999999 AND 99999999999 THEN m.date*1000 ELSE m.date END,m.is_read,COALESCE(m.list_unsubscribe,''),EXISTS(SELECT 1 FROM attachments a WHERE a.message_id=m.id AND a.is_inline=0 AND (LOWER(COALESCE(a.filename,'')) LIKE '%.xml' AND (LOWER(a.filename) LIKE '%nfe%' OR LOWER(a.filename) LIKE '%nf-e%' OR LOWER(a.filename) LIKE '%proc%' OR LENGTH(a.filename)>=48))),EXISTS(SELECT 1 FROM contact_values v WHERE v.kind='EMAIL' AND v.value=m.from_addr COLLATE NOCASE) OR EXISTS(SELECT 1 FROM contacts ct WHERE ct.email=m.from_addr COLLATE NOCASE AND ct.send_count>0),(SELECT category FROM ai_triage_senders t WHERE t.account_id=m.account_id AND t.sender=m.from_addr COLLATE NOCASE),EXISTS(SELECT 1 FROM message_labels ml JOIN labels l ON l.id=ml.label_id WHERE ml.message_id=m.id AND l.is_auto=1 AND LOWER(l.name) IN ('marketing','news','social','pitch')) FROM messages m WHERE m.is_draft=0 AND m.is_outgoing=0 AND (?1 IS NULL OR m.account_id=?1) AND (?2 IS NULL OR m.id=?2) AND (CASE WHEN m.date BETWEEN -99999999999 AND 99999999999 THEN m.date*1000 ELSE m.date END)>=?3 AND (CASE WHEN m.date BETWEEN -99999999999 AND 99999999999 THEN m.date*1000 ELSE m.date END)<?4 ORDER BY 7 DESC,m.id DESC LIMIT 5001";
- let mut q=c.prepare(sql)?;let rows=q.query_map(rusqlite::params![account,message,from,to],|r|{let subject:String=r.get(4)?;let snippet:String=r.get(5)?;let un:String=r.get(8)?;let (mut cat,mut reason)=classify(&subject,&snippet,!un.is_empty(),r.get(9)?,r.get(10)?,r.get(12)?);let corrected:Option<String>=r.get(11)?;if let Some(c)=corrected.and_then(|s|serde_json::from_str(&s).ok()){cat=c;reason="sender.correction";}Ok(Item{message_id:r.get(0)?,thread_id:r.get(1)?,account_id:r.get(2)?,sender:r.get(3)?,subject,snippet,date_ms:r.get(6)?,unread:!r.get::<_,bool>(7)?,category:cat,reason:reason.into()})})?;Ok(rows.collect::<std::result::Result<Vec<_>,_>>()?) }).await?;
+ let sql="SELECT m.id,COALESCE(m.thread_id,0),m.account_id,substr(COALESCE(m.from_addr,''),1,256),substr(m.subject,1,300),substr(m.snippet,1,300),CASE WHEN m.date BETWEEN -99999999999 AND 99999999999 THEN m.date*1000 ELSE m.date END,m.is_read,COALESCE(m.list_unsubscribe,''),EXISTS(SELECT 1 FROM attachments a WHERE a.message_id=m.id AND a.is_inline=0 AND (LOWER(COALESCE(a.filename,'')) LIKE '%.xml' AND (LOWER(a.filename) LIKE '%nfe%' OR LOWER(a.filename) LIKE '%nf-e%' OR LOWER(a.filename) LIKE '%proc%' OR LENGTH(a.filename)>=48))),EXISTS(SELECT 1 FROM contact_values v WHERE v.kind='EMAIL' AND v.value=m.from_addr COLLATE NOCASE) OR EXISTS(SELECT 1 FROM contacts ct WHERE ct.email=m.from_addr COLLATE NOCASE AND ct.send_count>0),(SELECT category FROM ai_triage_senders t WHERE t.account_id=m.account_id AND t.sender=m.from_addr COLLATE NOCASE),EXISTS(SELECT 1 FROM message_labels ml JOIN labels l ON l.id=ml.label_id WHERE ml.message_id=m.id AND l.is_auto=1 AND LOWER(l.name) IN ('marketing','news','social','pitch')) FROM messages m WHERE m.is_draft=0 AND m.is_outgoing=0 AND (?1 IS NULL OR m.account_id=?1) AND (?2 IS NULL OR m.id=?2) AND (CASE WHEN m.date BETWEEN -99999999999 AND 99999999999 THEN m.date*1000 ELSE m.date END)>=?3 AND (CASE WHEN m.date BETWEEN -99999999999 AND 99999999999 THEN m.date*1000 ELSE m.date END)<?4 ORDER BY 7 DESC,m.id DESC LIMIT 5001";
+ let mut q=c.prepare(sql)?;let rows=q.query_map(rusqlite::params![account,message,from,to],|r|{let subject=safe(&r.get::<_,String>(4)?);let snippet=safe(&r.get::<_,String>(5)?);let un:String=r.get(8)?;let (mut cat,mut reason)=classify(&subject,&snippet,!un.is_empty(),r.get(9)?,r.get(10)?,r.get(12)?);let corrected:Option<String>=r.get(11)?;if let Some(c)=corrected.and_then(|s|serde_json::from_str(&s).ok()){cat=c;reason="sender.correction";}Ok(Item{message_id:r.get(0)?,thread_id:r.get(1)?,account_id:r.get(2)?,sender:safe(&r.get::<_,String>(3)?),subject,snippet,date_ms:r.get(6)?,unread:!r.get::<_,bool>(7)?,category:cat,reason:reason.into()})})?;Ok(rows.collect::<std::result::Result<Vec<_>,_>>()?) }).await?;
         let truncated = items.len() > CAP;
         items.truncate(CAP);
         if use_ai && self.digest_settings().await?.ai_enhancement {
@@ -297,8 +302,10 @@ impl Core {
             end,
             timezone: Local::now().format("%Z %:z").to_string(),
             counts,
+            total_messages: items.len(),
             items,
             truncated,
+            details_truncated: false,
         })
     }
     /// Claim once per local day before notification/email proposal; never retry a send automatically.

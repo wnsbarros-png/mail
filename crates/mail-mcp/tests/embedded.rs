@@ -1190,6 +1190,14 @@ async fn digest_triage_correction_approval_and_sender_scope() {
     assert_eq!(original["policy"]["effect"], "allow");
     let digest: Digest = serde_json::from_value(original).unwrap();
     assert_eq!(digest.items.len(), 6);
+    let filtered = server
+        .call_tool("get_digest", &json!({"category":"newsletter"}))
+        .await
+        .unwrap();
+    assert_eq!(filtered["items"].as_array().unwrap().len(), 1);
+    assert_eq!(filtered["total_messages"], 6);
+    assert_eq!(filtered["counts"]["finance"], 1);
+
     assert_eq!(
         digest
             .items
@@ -1388,7 +1396,9 @@ async fn digest_caps_results_and_excludes_outgoing_and_other_dates() {
     core.db.write(|c|{let date=chrono::Local::now().timestamp_millis();let tx=c.transaction()?;for id in 1..=5002{tx.execute("INSERT INTO messages(id,account_id,from_addr,subject,date) VALUES(?1,1,'synthetic@example.invalid','Local metadata',?2)",(id,date))?;}tx.execute("INSERT INTO messages(id,account_id,date,is_outgoing) VALUES(6000,1,?1,1)",[date])?;tx.execute("INSERT INTO messages(id,account_id,date,is_draft) VALUES(6001,1,?1,1)",[date])?;tx.execute("INSERT INTO messages(id,account_id,date) VALUES(6002,1,0)",[])?;tx.commit()?;Ok(())}).await.unwrap();
     let v = server.call_tool("get_digest", &json!({})).await.unwrap();
     assert_eq!(v["truncated"], true);
-    assert_eq!(v["items"].as_array().unwrap().len(), 5000);
+    assert_eq!(v["items"].as_array().unwrap().len(), 200);
+    assert_eq!(v["total_messages"], 5000);
+    assert_eq!(v["details_truncated"], true);
     assert!(
         v["items"]
             .as_array()
@@ -1396,4 +1406,26 @@ async fn digest_caps_results_and_excludes_outgoing_and_other_dates() {
             .iter()
             .all(|i| i["message_id"].as_i64().unwrap() <= 5002)
     );
+    let unicode = "界".repeat(300);
+    core.db
+        .write(move |c| {
+            c.execute("UPDATE messages SET subject=?1,snippet=?1", [unicode])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    let host = BridgeHost::start(_dir.path(), server.clone())
+        .await
+        .unwrap();
+    let mut bridge = BridgeClient::connect(_dir.path()).await.unwrap();
+    let response=bridge.handle(json!({"jsonrpc":"2.0","id":99,"method":"tools/call","params":{"name":"get_digest","arguments":{}}})).await.unwrap().unwrap();
+    assert_eq!(
+        response["result"]["structuredContent"]["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        200
+    );
+    assert!(serde_json::to_vec(&response).unwrap().len() < 2 * 1024 * 1024);
+    drop(host);
 }

@@ -637,7 +637,8 @@ Ferramentas novas (todas passam pela política e pelo histórico sem corpos):
 ```
 
 `get_digest` e `get_triage`: padrão hoje, datas inclusivas `YYYY-MM-DD`, até 31 dias,
-5000 mensagens recebidas locais (não rascunhos/enviadas), `truncated` explícito,
+contagens de até 5000 mensagens recebidas locais (não rascunhos/enviadas), `truncated` explícito,
+até 200 detalhes por filtro `category`, `total_messages` e `details_truncated`,
 `accountId` opcional e `enhance:true` somente com opt-in salvo. `get_triage` aceita
 `messageId`; para mensagem antiga inclua seu dia/período. Respostas trazem categoria,
 origem (`reason`), contagens, fuso e a regra aplicada. Padrão de leitura: permitir;
@@ -682,7 +683,9 @@ responses retain the local category.
 MCP: `get_digest` and `get_triage` default to today's local date; accept `date` or inclusive
 `start`/`end` (YYYY-MM-DD, 1–31 days), optional `accountId`, and `enhance:true` only with saved
 opt-in. `get_triage` additionally accepts `messageId` (include the date/range for old mail).
-Both return up to 5000 incoming/non-draft messages, explicit truncation, counts, reason and
+Both scan up to 5000 incoming/non-draft messages for counts and return at most 200 detail
+rows per optional `category` filter, `total_messages`, `details_truncated`, explicit scan
+truncation, counts, reason and
 policy metadata. Reads default Allow; retrieve an approved Ask result with
 `get_action_result`, rather than re-proposing. `set_category` accepts messageId and category
 `urgent|customer|finance|invoice|newsletter|other`, defaults Ask, and remembers the sender in
@@ -690,3 +693,13 @@ that account. All three tools use the central evaluator and content-free history
 settings, corrections and daily claims live in profile SQLite. Invalid settings fail back
 to 08:00, email OFF, AI OFF. No hosted routines/service, no real accounts needed in tests.
 Synthetic screenshot: `docs/images/daily-digest-pt-BR.png`.
+
+Digest detail responses are bounded for the local bridge's 2 MiB frame limit (including
+MCP text + structured content). Subjects/snippets are limited to 300 characters; no body
+is included. Email contains category counts and the first 200 entries with an explicit
+truncation note. Scheduled generation covers the current local calendar day up to that
+point, not a rolling 24-hour window; later mail appears on manual refresh. / Os detalhes
+são limitados para respeitar os quadros de 2 MiB da ponte. Assunto/trecho: até 300
+caracteres, sem corpos. O e-mail contém contagens e até 200 itens, com aviso de limite.
+O agendamento resume o dia local atual até aquele momento, não as últimas 24 horas;
+mensagens posteriores aparecem ao atualizar manualmente.

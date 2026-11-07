@@ -1,7 +1,7 @@
 //! Native, app-lifetime daily scheduling. No background service, no autonomous retries.
 use crate::{AppWindow, InboxState, TriageRow};
 
-use flectar_mail_core::triage::{self, CATEGORIES, Digest, Settings};
+use flectar_mail_core::triage::{self, CATEGORIES, Category, Digest, Settings};
 
 use serde_json::json;
 
@@ -46,7 +46,7 @@ fn show(app: &AppWindow, d: &Digest) {
         format!(
             "{} · {} mensagens / messages · {}\n{}",
             d.start,
-            d.items.len(),
+            d.total_messages,
             d.timezone,
             CATEGORIES
                 .iter()
@@ -98,14 +98,16 @@ async fn read_digest(
     date: &str,
     settings: &Settings,
     ticket: &ReadTicket,
+    category: Option<Category>,
 ) -> anyhow::Result<Digest> {
+    let key = format!("{date}:{category:?}");
     let previous = ticket
         .lock()
         .map_err(|_| anyhow::anyhow!("Digest state unavailable"))?
         .clone();
     let server = source.ai_server();
     if let Some((saved_date, account, enhance, id)) = previous
-        && saved_date == date
+        && saved_date == key
         && account == settings.account_id
         && enhance == settings.ai_enhancement
     {
@@ -132,18 +134,13 @@ async fn read_digest(
             "Aguardando aprovação, ou resultado expirou/foi cancelado; feche o resumo e revise o painel. / Awaiting approval, or result expired/cancelled; close the digest and review the panel."
         );
     }
-    let args =
-        json!({"date":date,"accountId":settings.account_id,"enhance":settings.ai_enhancement});
+    let args = json!({"date":date,"accountId":settings.account_id,"enhance":settings.ai_enhancement,"category":category});
     let value = server.call_tool_from_app("get_digest", &args).await?;
     if let Some(id) = value.get("pendingId").and_then(|v| v.as_str()) {
         *ticket
             .lock()
-            .map_err(|_| anyhow::anyhow!("Digest state unavailable"))? = Some((
-            date.into(),
-            settings.account_id,
-            settings.ai_enhancement,
-            id.into(),
-        ));
+            .map_err(|_| anyhow::anyhow!("Digest state unavailable"))? =
+            Some((key, settings.account_id, settings.ai_enhancement, id.into()));
     }
     decode(value)
 }
@@ -152,6 +149,7 @@ async fn load(
     date: String,
     desired: Option<Settings>,
     ticket: &ReadTicket,
+    category: Option<Category>,
 ) -> anyhow::Result<(Digest, Settings)> {
     let core = source.file_core();
     if let Some(s) = desired {
@@ -163,7 +161,7 @@ async fn load(
         core.save_digest_settings(s).await?;
     }
     let settings = core.digest_settings().await?;
-    let digest = read_digest(source, &date, &settings, ticket).await?;
+    let digest = read_digest(source, &date, &settings, ticket, category).await?;
     Ok((digest, settings))
 }
 async fn daily_tick(
@@ -180,7 +178,7 @@ async fn daily_tick(
         return Ok(None);
     }
     let server = source.ai_server();
-    let d = read_digest(source, &day, &s, ticket).await?;
+    let d = read_digest(source, &day, &s, ticket, None).await?;
     let status = if s.email_to_self {
         let id = s
             .account_id
@@ -226,12 +224,13 @@ fn register_commands(
             }
         } else {None};
         let initial=command=="load";
+        let category=usize::try_from(app.get_digest_filter()-1).ok().and_then(|i|CATEGORIES.get(i).copied());
         let date=if app.get_digest_date().is_empty() {triage::today()} else {app.get_digest_date().to_string()};
         let weak=weak.clone();
         let ticket=ticket.clone();
         app.set_digest_busy(true);
         handle.spawn(async move {
-            let result=load(&source,date,desired,&ticket).await;
+            let result=load(&source,date,desired,&ticket,category).await;
             let _lease=source;
             let _=weak.upgrade_in_event_loop(move |app| {
                 app.set_digest_busy(false);
@@ -388,12 +387,12 @@ mod tests {
         let day = triage::today();
         let settings = Settings::default();
         assert!(
-            read_digest(&source, &day, &settings, &ticket)
+            read_digest(&source, &day, &settings, &ticket, None)
                 .await
                 .is_err()
         );
         assert!(
-            read_digest(&source, &day, &settings, &ticket)
+            read_digest(&source, &day, &settings, &ticket, None)
                 .await
                 .is_err()
         );
@@ -403,7 +402,7 @@ mod tests {
             .approve_in_app(pending[0]["pendingId"].as_str().unwrap())
             .await
             .unwrap();
-        let result = read_digest(&source, &day, &settings, &ticket)
+        let result = read_digest(&source, &day, &settings, &ticket, None)
             .await
             .unwrap();
         assert!(result.items.is_empty());
@@ -412,7 +411,7 @@ mod tests {
         config.defaults.insert(Action::Read, Effect::Block);
         server.save_policy(config).await.unwrap();
         assert!(
-            read_digest(&source, &day, &settings, &ticket)
+            read_digest(&source, &day, &settings, &ticket, None)
                 .await
                 .is_err()
         );
