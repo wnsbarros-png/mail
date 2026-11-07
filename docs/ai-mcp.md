@@ -999,3 +999,12 @@ out of scope. Re-extraction replaces stale evidence; deletion cascades. Syntheti
 fixtures cover XML hardening, due-factor reset, DVs, PIX CRC, generated PDF,
 receipt confidence, index/path/CSV safety, policy and audit. No real accounts,
 emails or payments are needed for these tests.
+
+### Synthetic Documents panel / Painel sintético
+
+![Documentos financeiros com dados sintéticos](images/documents-pt-BR.png)
+
+Actual Slint software rendering, PT-BR labels, synthetic invoice/receipt only.
+Capture: `ai_controller::tests::documents_screenshot` (explicit ignored test),
+`MAIL_DOCUMENTS_SCREENSHOT=/workspace/documents-pt-BR.png`. No real accounts,
+attachments, validation requests or payments.
