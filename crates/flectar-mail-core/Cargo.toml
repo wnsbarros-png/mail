@@ -76,6 +76,9 @@ percent-encoding = "2"
 # CalDAV (HTTP + multistatus XML); rustls keeps the no-native-TLS property
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "form", "json", "stream"] }
 quick-xml = { version = "0.42", features = ["encoding"] }
+roxmltree = "0.21"
+# Pure Rust; bounded decompression/text APIs and nesting fixes for hostile PDFs.
+lopdf = { version = "0.47", default-features = false }
 async-trait = "0.1"
 
 # misc

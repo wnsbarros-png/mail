@@ -1848,6 +1848,7 @@ export component MailReadingPane inherits FocusScope {
                                         alignment: start;
                                         cross-axis-alignment: center;
 
+                                        Button {text:@tr("Documents");enabled:EmailReader.available;clicked=>{root.message_action("documents");}}
                                         if !root.selected_is_draft : ReaderControl {
                                             compact: root.compact;
                                             interactive: root.has_selected && LocalMailUi.can-send;

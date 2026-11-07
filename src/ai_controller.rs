@@ -679,4 +679,89 @@ mod tests {
         assert!(app.get_followup_open());
         assert_eq!(app.get_followup_rows().row_count(), 3);
     }
+    #[test]
+    #[ignore = "writes synthetic financial-document screenshot; run explicitly"]
+    fn documents_screenshot() {
+        use flectar_mail_core::documents::{DocumentRecord, FinancialDocument, Kind, Party};
+        let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+        slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
+        let app = AppWindow::new().unwrap();
+        app.set_startup_ready(true);
+        app.set_startup_hydrated(true);
+        slint::select_bundled_translation("pt_BR").unwrap();
+        app.set_documents_open(true);
+        app.set_documents_message("900".into());
+        app.set_documents_status(
+            "DADOS SINTÉTICOS · Nenhuma conta, pagamento, consulta externa ou envio real.".into(),
+        );
+        let mut invoice = FinancialDocument::new(Kind::Nfe);
+        invoice.issuer = Some(Party {
+            cnpj: Some("00000000000000".into()),
+            name: Some("EMITENTE SINTÉTICO".into()),
+        });
+        invoice.recipient = Some(Party {
+            cnpj: Some("00000000000000".into()),
+            name: Some("DESTINATÁRIO SINTÉTICO".into()),
+        });
+        invoice.number = Some("1".into());
+        invoice.series = Some("1".into());
+        invoice.amount_cents = Some(12345);
+        invoice.issued_at = Some("2026-11-07T08:00:00-03:00".into());
+        invoice.status = Some("100".into());
+        invoice.protocol = Some("000000000000000".into());
+        invoice.access_key = Some("00000000000000000000000000000000000000000000".into());
+        invoice.warn("xml_signature_not_verified");
+        invoice.warn("body_amount_mismatch");
+        let mut receipt = FinancialDocument::new(Kind::Receipt);
+        receipt.amount_cents = Some(12345);
+        receipt.issued_at = Some("2026-11-07".into());
+        receipt.confidence = "heuristic_medium".into();
+        receipt.warn("receipt_is_heuristic_not_payment_confirmation");
+        crate::documents_controller::present(
+            &app,
+            vec![invoice, receipt]
+                .into_iter()
+                .enumerate()
+                .map(|(index, document)| DocumentRecord {
+                    message_id: 900,
+                    account_id: 1,
+                    attachment_id: index as i64 + 1,
+                    index: 0,
+                    filename: if index == 0 {
+                        "nfe-sintetica.xml"
+                    } else {
+                        "comprovante-sintetico.pdf"
+                    }
+                    .into(),
+                    source_sha256: "synthetic".into(),
+                    document,
+                })
+                .collect(),
+        );
+        app.window()
+            .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.0 });
+        app.window().set_size(slint::PhysicalSize::new(1440, 1200));
+        app.show().unwrap();
+        let mut pixels = vec![slint::Rgb8Pixel::default(); 1440 * 1200];
+        for _ in 0..3 {
+            slint::platform::update_timers_and_animations();
+            app.window().request_redraw();
+            window.draw_if_needed(|r| {
+                r.render(&mut pixels, 1440);
+            });
+        }
+        image::RgbImage::from_raw(
+            1440,
+            1200,
+            pixels.iter().flat_map(|p| [p.r, p.g, p.b]).collect(),
+        )
+        .unwrap()
+        .save(
+            std::env::var_os("MAIL_DOCUMENTS_SCREENSHOT")
+                .unwrap_or_else(|| "documents-pt-BR.png".into()),
+        )
+        .unwrap();
+        assert!(app.get_documents_open());
+        assert_eq!(app.get_documents_rows().row_count(), 2);
+    }
 }

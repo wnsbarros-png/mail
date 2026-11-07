@@ -263,6 +263,7 @@ impl Server {
             )?;
         }
         let mut ctx = Context {
+            reads_documents: name == "export_documents_csv",
             uses_template: matches!(name, "send_message" | "reply_message")
                 && args.get("template_id").is_some(),
             ..Default::default()
@@ -284,6 +285,25 @@ impl Server {
         } else {
             None
         };
+        if matches!(name, "list_documents" | "export_documents_csv") {
+            let filters: flectar_mail_core::documents::DocumentFilters =
+                serde_json::from_value(args.get("filters").cloned().unwrap_or_else(|| json!({})))?;
+            filters.validate()?;
+            account = filters.account_id;
+        }
+        if name == "extract_documents" {
+            let id = req_i64(args, "message_id")?;
+            let d = self
+                .core
+                .db
+                .read(move |c| flectar_mail_core::db::repo::messages::detail(c, id))
+                .await?;
+            account = Some(d.account_id);
+            ctx.has_attachments = !d.attachments.is_empty();
+            ctx.attachment_metadata = true;
+            ctx.recipient_metadata = true;
+            ctx.recipients = d.to.into_iter().chain(d.cc).map(|a| a.email).collect();
+        }
         ctx.marks_read = name == "read_message" && arg_bool(args, "markRead").unwrap_or(false);
         if matches!(name, "send_message" | "reply_message") {
             ctx.recipient_metadata = true;
@@ -369,8 +389,10 @@ impl Server {
                     complete = false;
                 }
             }
-            ctx.recipient_metadata = complete;
-            ctx.attachment_metadata = complete;
+            if name != "extract_documents" {
+                ctx.recipient_metadata = complete;
+                ctx.attachment_metadata = complete;
+            }
         }
         if let Some(id) = account {
             ctx.accounts.push(id);

@@ -400,3 +400,39 @@ msgstr "Sem assunto"
 
 msgid "Edit"
 msgstr "Editar"
+
+msgctxt "MailReadingPane"
+msgid "Documents"
+msgstr "Documentos"
+
+msgctxt "DocumentsDialog"
+msgid "Documents"
+msgstr "Documentos"
+
+msgctxt "DocumentsDialog"
+msgid "Message"
+msgstr "Mensagem"
+
+msgctxt "DocumentsDialog"
+msgid "Local financial attachment reader. Checksums do not prove authenticity, authorization or payment. Verify the beneficiary and amount in your bank or SEFAZ."
+msgstr "Leitor local de documentos financeiros anexados. DVs não comprovam autenticidade, autorização ou pagamento. Confira o beneficiário e o valor no banco ou na SEFAZ."
+
+msgctxt "DocumentsDialog"
+msgid "Extract cached attachments"
+msgstr "Extrair anexos locais"
+
+msgctxt "DocumentsDialog"
+msgid "Export indexed CSV"
+msgstr "Exportar índice em CSV"
+
+msgctxt "DocumentsDialog"
+msgid "Copy key or payment code"
+msgstr "Copiar chave ou código de pagamento"
+
+msgctxt "DocumentsDialog"
+msgid "Copy extracted fields"
+msgstr "Copiar campos extraídos"
+
+msgctxt "DocumentsDialog"
+msgid "Only cached XML, text and text-bearing PDF files are read. Download attachments normally first. No OCR, uploads, payment initiation or automatic validation requests. CSV exports the existing local index, up to 100 records."
+msgstr "Somente XML, texto e PDF com camada de texto já baixados são lidos. Baixe os anexos normalmente primeiro. Sem OCR, uploads, pagamentos ou consultas de validação automáticas. O CSV exporta o índice local existente, até 100 registros."

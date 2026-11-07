@@ -45,7 +45,9 @@ impl Action {
         Some(match tool {
             "list_accounts" | "list_folders" | "list_messages" | "list_templates" => Self::List,
             "read_message" | "get_new_messages" | "get_digest" | "get_triage"
-            | "render_template" | "list_followups" => Self::Read,
+            | "render_template" | "list_followups" | "extract_documents" | "list_documents" => {
+                Self::Read
+            }
             "search_messages" => Self::Search,
             "mark_read" => Self::MarkRead,
             "set_category" => Self::Categorize,
@@ -59,7 +61,7 @@ impl Action {
                     Self::Delete
                 }
             }
-            "download_attachment" => Self::Download,
+            "download_attachment" | "export_documents_csv" => Self::Download,
             "sync_now" => Self::Sync,
             "confirm_action" | "cancel_action" | "list_pending_actions" | "get_action_result" => {
                 Self::Control
@@ -132,6 +134,7 @@ impl Default for Config {
 }
 #[derive(Clone, Debug, Default)]
 pub struct Context {
+    pub reads_documents: bool,
     pub uses_template: bool,
     pub followup: bool,
     pub accounts: Vec<i64>,
@@ -324,7 +327,10 @@ impl Config {
         }
         let (primary, override_new) = self.facet(a, c);
         let mut applied = vec![primary];
-        if a == Action::Reply || (a == Action::Send && c.uses_template) {
+        if a == Action::Reply
+            || (a == Action::Send && c.uses_template)
+            || (a == Action::Download && c.reads_documents)
+        {
             applied.push(self.facet(Action::Read, c).0);
         }
         if a == Action::Read && c.marks_read {
@@ -546,6 +552,7 @@ mod tests {
     use super::*;
     fn ctx() -> Context {
         Context {
+            reads_documents: false,
             uses_template: false,
             followup: false,
             accounts: vec![1],

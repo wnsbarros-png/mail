@@ -11,6 +11,7 @@ mod attachment_controller;
 #[cfg(desktop)]
 mod autostart;
 mod browser;
+mod documents_controller;
 #[cfg(desktop)]
 mod followup_controller;
 #[cfg(desktop)]
@@ -2015,6 +2016,7 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
     app.set_sidebar_rows(Rc::clone(&initial_state.sidebar_rows).into());
     let state = Rc::new(RefCell::new(initial_state));
     #[cfg(desktop)]
+    documents_controller::register(&app, &state, &runtime);
     let _followup_timer = followup_controller::register(&app, &state, &runtime);
     let _daily_digest_timer = triage_controller::register(&app, &state, &runtime);
     #[cfg(desktop)]
@@ -5600,6 +5602,10 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
         let Some(app) = app_weak.upgrade() else {
             return;
         };
+        if action == "documents" {
+            documents_controller::open(&app, &state_for_action);
+            return;
+        }
         if let Err(error) =
             perform_selected_action(&app, &state_for_action, &runtime_for_action, &action)
         {

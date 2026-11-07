@@ -1,0 +1,33 @@
+import { ScrollView } from "std-widgets.slint";
+import { Button } from "../components/button.slint";
+export struct DocumentRow {title:string,summary:string,warnings:string,code:string,details:string}
+export component DocumentsDialog inherits Rectangle {
+ in property <[DocumentRow]> rows;
+ in property <string> status;
+ in property <string> message;
+ in property <bool> busy;
+ callback command(string);
+ callback copy(string);
+ callback close;
+ background:#f8fafc;border-radius:12px;
+ VerticalLayout {padding:20px;spacing:12px;
+  HorizontalLayout {Text {text:@tr("Documents");font-size:26px;color:#172033;vertical-alignment:center;}Button {horizontal-stretch:0;text:@tr("Close");clicked=>{root.close();}}}
+  Text {text:@tr("Local financial attachment reader. Checksums do not prove authenticity, authorization or payment. Verify the beneficiary and amount in your bank or SEFAZ.");wrap:word-wrap;color:#92400e;font-weight:600;}
+  HorizontalLayout {spacing:8px;Text {text:@tr("Message")+" #"+root.message;color:#475569;vertical-alignment:center;}Button {text:@tr("Extract cached attachments");enabled:!root.busy;clicked=>{root.command("extract");}}Button {text:@tr("Export indexed CSV");enabled:!root.busy;clicked=>{root.command("export");}}}
+  Text {text:root.status;wrap:word-wrap;color:#475569;}
+  ScrollView {vertical-stretch:1;content-width:self.width;
+   VerticalLayout {spacing:12px;
+    for row in root.rows: Rectangle {height:400px;background:#fff;border-color:#cbd5e1;border-width:1px;border-radius:8px;
+     VerticalLayout {padding:12px;spacing:8px;
+      Text {text:row.title;color:#172033;font-size:20px;font-weight:600;overflow:elide;}
+      Text {text:row.summary;wrap:word-wrap;color:#334155;}
+      Text {text:row.warnings;wrap:word-wrap;color:#92400e;}
+      Rectangle {vertical-stretch:1;}
+      HorizontalLayout {spacing:8px;Button {text:@tr("Copy key or payment code");enabled:row.code!="";clicked=>{root.copy(row.code);}}Button {text:@tr("Copy extracted fields");clicked=>{root.copy(row.details);}}}
+     }
+    }
+   }
+  }
+  Text {text:@tr("Only cached XML, text and text-bearing PDF files are read. Download attachments normally first. No OCR, uploads, payment initiation or automatic validation requests. CSV exports the existing local index, up to 100 records.");wrap:word-wrap;color:#475569;}
+ }
+}

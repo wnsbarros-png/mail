@@ -11,6 +11,7 @@ pub mod carddav;
 pub mod cloud_links;
 pub mod config;
 pub mod db;
+pub mod documents;
 pub mod embed;
 pub mod error;
 pub mod events;
