@@ -41,6 +41,8 @@ import { CalendarEventDialog } from "dialogs/calendar-event-dialog.slint";
 import { ComposeDialog } from "dialogs/compose-dialog.slint";
 import { FolderDialog } from "dialogs/folder-dialog.slint";
 import { ConfirmationDialog } from "components/confirmation-dialog.slint";
+import { DigestDialog, TriageRow } from "dialogs/digest-dialog.slint";
+export { TriageRow } from "dialogs/digest-dialog.slint";
 import { SettingsDialog } from "dialogs/settings-dialog.slint";
 import { AccountImport, ImportDialog } from "dialogs/import-dialog.slint";
 export { LocalMailUi } from "local-mail.slint";
@@ -785,6 +787,20 @@ export component AppWindow inherits Window {
     in-out property <string> dropbox-app-key;
     in-out property <string> cloud-auth-account;
     callback cloud-connect(string,string,string);
+    in-out property <bool> digest-open;
+    in-out property <bool> digest-busy;
+    in-out property <string> digest-date;
+    in-out property <string> digest-time: "08:00";
+    in-out property <bool> digest-email-self;
+    in-out property <bool> digest-enhance;
+    in-out property <string> digest-account;
+    in-out property <int> digest-filter;
+    in property <[TriageRow]> digest-rows;
+    in property <string> digest-summary;
+    in property <string> digest-status;
+    callback digest-command(string);
+    callback digest-correct(int,int);
+    changed digest-open => {if root.digest-open {root.digest-command("load");}}
     in-out property <bool> ai-policy-open;
     in-out property <bool> ai-policy-busy;
     in-out property <int> ai-policy-action;
@@ -2115,6 +2131,7 @@ export component AppWindow inherits Window {
             }
             clear_contact_suggestions => { return root.clear_contact_suggestions(); }
             set_close_to_tray(enabled) => { root.set_close_to_tray(enabled); }
+            digest-settings => {root.digest-open = true;}
             ai-policy-settings => {root.ai-policy-open = true;}
             set_launch_at_login(enabled) => { root.set_launch_at_login(enabled); }
             sync_mail => { root.sync_mail(); }
@@ -2461,6 +2478,13 @@ export component AppWindow inherits Window {
         }
     }
 
+    if root.digest-open: Rectangle {x:0;y:0;width:parent.width;height:parent.height;background:#0008;z:19600;
+        DigestDialog {x:30px;y:30px;width:parent.width - 60px;height:parent.height - 60px;
+            date<=>root.digest-date;time<=>root.digest-time;email-self<=>root.digest-email-self;enhance<=>root.digest-enhance;account<=>root.digest-account;filter<=>root.digest-filter;
+            rows:root.digest-rows;summary:root.digest-summary;status:root.digest-status;busy:root.digest-busy;
+            command(c)=>{root.digest-command(c);}correct(id,category)=>{root.digest-correct(id,category);}open-message(id)=>{root.digest-open=false;root.select_email(id);}close=>{root.digest-open=false;}
+        }
+    }
     if root.ai-policy-open : AiPolicyDialog {
         z: 19500; width: parent.width; height: parent.height;
         open <=> root.ai-policy-open;

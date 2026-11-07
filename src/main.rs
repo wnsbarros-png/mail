@@ -11,6 +11,7 @@ mod attachment_controller;
 #[cfg(desktop)]
 mod autostart;
 mod browser;
+mod triage_controller;
 pub use browser::ExternalUrlOpener;
 mod calendar;
 mod compose_controller;
@@ -2011,6 +2012,7 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
     app.set_sidebar_rows(Rc::clone(&initial_state.sidebar_rows).into());
     let state = Rc::new(RefCell::new(initial_state));
     #[cfg(desktop)]
+    let _daily_digest_timer = triage_controller::register(&app, &state, &runtime);
     let _ai_review_timer = ai_controller::register(&app, &state, &runtime, &platform.external_urls);
     mail_work::register(&app, &state, &runtime);
     files_controller::register(

@@ -40,6 +40,7 @@ pub mod sender_identities;
 pub mod signatures;
 pub mod smtp;
 pub mod sync;
+pub mod triage;
 pub mod unsubscribe;
 pub mod verification_code;
 

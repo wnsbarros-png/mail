@@ -608,6 +608,7 @@ export component SettingsDialog inherits Rectangle {
     callback clear_contact_suggestions() -> bool;
     callback set_close_to_tray(bool);
     callback ai-policy-settings;
+    callback digest-settings;
     callback set_launch_at_login(bool);
     callback sync_mail();
     callback sync_account(int);
@@ -1402,6 +1403,7 @@ export component SettingsDialog inherits Rectangle {
                                     spacing: 16px;
                                     VerticalBox {
                                         spacing: 5px;
+                                        Button {text: @tr("Daily digest and triage");clicked=>{root.digest-settings();}}
                                         Button {text: @tr("AI approval rules and history"); clicked => {root.ai-policy-settings();}}
                                         mailto-title := Text { height: max(20px, self.preferred-height); text: @tr("Default email app"); color: root.heading; font-size: TypeScale.subtitle; font-weight: 700; }
                                         mailto-description := Text {

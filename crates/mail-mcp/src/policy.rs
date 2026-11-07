@@ -21,9 +21,10 @@ pub enum Action {
     CloudUpload,
     Download,
     Sync,
+    Categorize,
     Control,
 }
-pub const ACTIONS: [Action; 11] = [
+pub const ACTIONS: [Action; 12] = [
     Action::List,
     Action::Read,
     Action::Search,
@@ -35,14 +36,16 @@ pub const ACTIONS: [Action; 11] = [
     Action::CloudUpload,
     Action::Download,
     Action::Sync,
+    Action::Categorize,
 ];
 impl Action {
     pub fn for_tool(tool: &str, args: &serde_json::Value) -> Option<Self> {
         Some(match tool {
             "list_accounts" | "list_folders" | "list_messages" => Self::List,
-            "read_message" | "get_new_messages" => Self::Read,
+            "read_message" | "get_new_messages" | "get_digest" | "get_triage" => Self::Read,
             "search_messages" => Self::Search,
             "mark_read" => Self::MarkRead,
+            "set_category" => Self::Categorize,
             "send_message" => Self::Send,
             "reply_message" => Self::Reply,
             "delete_message" => {

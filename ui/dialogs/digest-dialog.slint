@@ -1,0 +1,45 @@
+import { ScrollView, ComboBox, CheckBox } from "std-widgets.slint";
+import { Button } from "../components/button.slint";
+import { LineEdit } from "../components/controls.slint";
+export struct TriageRow {id:int,sender:string,subject:string,category:string,category-index:int,unread:bool}
+export component DigestDialog inherits Rectangle {
+ in-out property <string> date;
+ in-out property <string> time: "08:00";
+ in-out property <bool> email-self;
+ in-out property <bool> enhance;
+ in-out property <string> account;
+ in-out property <int> filter;
+ in property <[TriageRow]> rows;
+ in property <string> summary;
+ in property <string> status;
+ in property <bool> busy;
+ callback command(string);
+ callback correct(int,int);
+ callback open-message(int);
+ callback close;
+ background: #f8fafc; border-radius: 12px;
+ private property <[string]> categories:[@tr("Urgent"),@tr("Customer"),@tr("Billing and finance"),@tr("Invoice"),@tr("Marketing and newsletter"),@tr("Other")];
+ VerticalLayout {
+  padding: 20px; spacing: 10px;
+  HorizontalLayout { Text {text:@tr("Daily digest and triage");font-size:24px;color:#172033;vertical-alignment:center;} Button {text:@tr("Close");clicked=>{root.close();}} }
+  Text {text:@tr("Local mail metadata only. Open a message or correct its category; corrections are remembered for this sender and account.");wrap:word-wrap;color:#334155;}
+  HorizontalLayout {spacing:8px; Text {text:@tr("Date (YYYY-MM-DD)");vertical-alignment:center;}LineEdit {text<=>root.date;}Button {text:@tr("Refresh");enabled:!root.busy;clicked=>{root.command("refresh");}}ComboBox {model:[@tr("All categories"),@tr("Urgent"),@tr("Customer"),@tr("Billing and finance"),@tr("Invoice"),@tr("Marketing and newsletter"),@tr("Other")];current-index<=>root.filter;selected(_)=>{root.command("filter");}} }
+  Rectangle {height:1px;background:#cbd5e1;}
+  HorizontalLayout {spacing:8px;Text {text:@tr("Daily time (local)");vertical-alignment:center;}LineEdit {text<=>root.time;width:85px;}CheckBox {text:@tr("Email digest to myself");checked<=>root.email-self;}Text {text:@tr("Account ID");vertical-alignment:center;}LineEdit {text<=>root.account;width:65px;}Button {text:@tr("Save settings");enabled:!root.busy;clicked=>{root.command("save");}} }
+  CheckBox {text:@tr("Optional AI enhancement: send unresolved subject, sender and snippet to my configured AI provider");checked<=>root.enhance;}
+  Text {text:@tr("Email is off by default; only the selected account's own address is allowed. Approval rules apply. The app must be open.");wrap:word-wrap;color:#475569;}
+  Text {text:root.summary;wrap:word-wrap;color:#172033;}
+  Text {text:root.status;wrap:word-wrap;color:#475569;}
+  ScrollView {vertical-stretch:1;viewport-width:self.width;
+   VerticalLayout {spacing:8px;
+    for row in root.rows: Rectangle {height:105px;background:row.unread?#eaf2ff:#ffffff;border-width:1px;border-color:#cbd5e1;border-radius:8px;
+     VerticalLayout {padding:10px;spacing:5px;
+      Text {text:row.category+" · "+row.sender;overflow:elide;color:#475569;}
+      Text {text:row.subject;overflow:elide;color:#172033;font-weight:600;}
+      HorizontalLayout {spacing:8px;Button {text:@tr("Open message");clicked=>{root.open-message(row.id);}}choice:=ComboBox {model:root.categories;current-index:row.category-index;}Button {text:@tr("Save category");enabled:!root.busy;clicked=>{root.correct(row.id,choice.current-index);}}}
+     }
+    }
+   }
+  }
+ }
+}

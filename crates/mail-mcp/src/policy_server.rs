@@ -137,6 +137,8 @@ impl Server {
                 | "search_messages"
                 | "get_new_messages"
                 | "sync_now"
+                | "get_digest"
+                | "get_triage"
         ) {
             arg_i64(args, "accountId")
         } else {
@@ -193,8 +195,10 @@ impl Server {
             } else {
                 Vec::new()
             };
-            if matches!(name, "read_message" | "download_attachment")
-                && let Some(id) = arg_i64(args, "messageId")
+            if matches!(
+                name,
+                "read_message" | "download_attachment" | "get_triage" | "set_category"
+            ) && let Some(id) = arg_i64(args, "messageId")
             {
                 ids.push(id);
             }
@@ -283,6 +287,13 @@ impl Server {
         }
     }
     pub async fn call_tool(&self, name: &str, args: &Value) -> Result<Value> {
+        self.call_tool_as(name, args, "mcp_client").await
+    }
+    /// Native UI/scheduler entry; all policy and mandatory audit checks still apply.
+    pub async fn call_tool_from_app(&self, name: &str, args: &Value) -> Result<Value> {
+        self.call_tool_as(name, args, "desktop_digest").await
+    }
+    async fn call_tool_as(&self, name: &str, args: &Value, actor: &str) -> Result<Value> {
         let action = if let Some(action) = Action::for_tool(name, args) {
             action
         } else {
@@ -292,15 +303,8 @@ impl Server {
             decision.reason = "unknown_tool".into();
             decision.applied[0].effect = Effect::Block;
             decision.applied[0].rule_id = "invariant.unknown_tool".into();
-            self.record(
-                "mcp_client",
-                Action::Control,
-                &context,
-                &decision,
-                "blocked",
-                None,
-            )
-            .await?;
+            self.record(actor, Action::Control, &context, &decision, "blocked", None)
+                .await?;
             return Err(policy::Denied(decision).into());
         };
         let ctx = match self.tool_context(name, args).await {
@@ -308,7 +312,7 @@ impl Server {
             Err(e) => {
                 let ctx = Context::default();
                 let d = self.decision(action, &ctx).await;
-                self.record("mcp_client", action, &ctx, &d, "invalid_input", None)
+                self.record(actor, action, &ctx, &d, "invalid_input", None)
                     .await?;
                 return Err(RoutedError {
                     decision: d,
@@ -318,7 +322,7 @@ impl Server {
             }
         };
         let decision = self.decision(action, &ctx).await;
-        self.record("mcp_client", action, &ctx, &decision, "started", None)
+        self.record(actor, action, &ctx, &decision, "started", None)
             .await
             .map_err(|_| RoutedError {
                 decision: decision.clone(),
@@ -326,7 +330,7 @@ impl Server {
                     .into(),
             })?;
         if decision.effect == Effect::Block {
-            self.record("mcp_client", action, &ctx, &decision, "blocked", None)
+            self.record(actor, action, &ctx, &decision, "blocked", None)
                 .await?;
             return Err(policy::Denied(decision).into());
         }
@@ -358,7 +362,7 @@ impl Server {
             self.dispatch(name, args, &decision, &ctx).await
         };
         let result=result.map(|mut v|{if action==Action::Reply && decision.applied.iter().any(|r|r.action==Action::Read && r.effect==Effect::Ask) && v["status"]=="pending_confirmation" {v["summary"]=json!({"action":"reply","policy":decision,"note":"Review the original message and proposed reply in the desktop app."});}v});
-        self.finish_record("mcp_client", action, &ctx, &decision, result)
+        self.finish_record(actor, action, &ctx, &decision, result)
             .await
     }
     pub async fn stage_cloud_draft(

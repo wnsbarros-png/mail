@@ -152,6 +152,7 @@ fn action_label(a: Action) -> &'static str {
         Action::CloudUpload => "Upload na nuvem / Cloud upload",
         Action::Download => "Baixar anexo / Download",
         Action::Sync => "Sincronizar / Sync",
+        Action::Categorize => "Corrigir categoria / Correct triage category",
         Action::Control => "Revisão e configurações / Review and settings",
     }
 }

@@ -23,7 +23,7 @@ export component AiPolicyDialog inherits Rectangle {
     callback remove-rule;
     callback reload;
     callback restore-defaults;
-    private property <[string]> actions: [@tr("List accounts, folders and messages"),@tr("Read and monitor messages"),@tr("Search messages"),@tr("Mark read or unread"),@tr("Send messages"),@tr("Reply to messages"),@tr("Move to trash"),@tr("Permanently delete"),@tr("Upload cloud attachments"),@tr("Download attachments"),@tr("Request synchronization")];
+    private property <[string]> actions: [@tr("List accounts, folders and messages"),@tr("Read and monitor messages"),@tr("Search messages"),@tr("Mark read or unread"),@tr("Send messages"),@tr("Reply to messages"),@tr("Move to trash"),@tr("Permanently delete"),@tr("Upload cloud attachments"),@tr("Download attachments"),@tr("Request synchronization"),@tr("Correct triage category")];
     private property <[string]> modes: [@tr("Always allow"),@tr("Ask"),@tr("Block")];
     private property <[string]> conditions: [@tr("Any"),@tr("Yes"),@tr("No")];
     changed action-index => {root.select-action(root.action-index);}

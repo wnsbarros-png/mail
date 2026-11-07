@@ -494,6 +494,9 @@ impl Server {
         let confirm_note = " Subject to per-action AI policy. Results identify the applied rule. Cloud uploads always require in-app approval.";
         let addr = json!({"type":"array","items":{"type":"string"},"description":"Addresses like \"Name <a@b.com>\" or \"a@b.com\""});
         json!([
+          {"name":"get_digest","description":"Local header-first daily digest, inclusive local dates (1–31 days), up to 5000 incoming messages. Optional AI enhancement requires explicit settings opt-in. No bodies fetched.","inputSchema":{"type":"object","properties":{"date":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"},"accountId":{"type":"integer"},"enhance":{"type":"boolean"}}}},
+          {"name":"get_triage","description":"Local triage items; optional messageId, accountId, date or inclusive start/end dates. Same range and limits as get_digest.","inputSchema":{"type":"object","properties":{"messageId":{"type":"integer"},"accountId":{"type":"integer"},"date":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"},"enhance":{"type":"boolean"}}}},
+          {"name":"set_category","description":"Remember a triage correction for this sender in this account. Requires Categorize approval by default.","inputSchema":{"type":"object","required":["messageId","category"],"properties":{"messageId":{"type":"integer"},"category":{"type":"string","enum":["urgent","customer","finance","invoice","newsletter","other"]}}}},
           {"name":"list_accounts","description":"List configured mail accounts (Gmail, Outlook, IMAP/SMTP such as GoDaddy or Hostinger, JMAP, POP3) with their sync state.","inputSchema":{"type":"object","properties":{}}},
           {"name":"list_folders","description":"List folders/mailboxes of one account or all accounts.","inputSchema":{"type":"object","properties":{"accountId":{"type":"integer"}}}},
           {"name":"list_messages","description":"List recent messages, newest first, from a standard folder or a folder id.","inputSchema":{"type":"object","properties":{
@@ -550,6 +553,19 @@ impl Server {
         }
         match name {
             "list_accounts" => self.list_accounts().await,
+            "get_digest"|"get_triage"=>{
+                let date=arg_str(args,"date").map(str::to_owned).unwrap_or_else(flectar_mail_core::triage::today);
+                let start=arg_str(args,"start").map(str::to_owned).unwrap_or(date);
+                let end=arg_str(args,"end").map(str::to_owned).unwrap_or_else(||start.clone());
+                let digest=self.core.get_digest(start,end,arg_i64(args,"accountId"),if name=="get_triage"{arg_i64(args,"messageId")}else{None},arg_bool(args,"enhance").unwrap_or(false)).await?;
+                Ok(serde_json::to_value(digest)?)
+            }
+            "set_category"=>{
+                let category=serde_json::from_value(args.get("category").cloned().ok_or_else(||anyhow!("Missing category"))?)?;
+                self.core.set_triage_category(req_i64(args,"messageId")?,category).await?;
+                Ok(json!({"status":"updated","category":category}))
+            }
+
             "list_folders" => {
                 let folders = self.core.list_folders(arg_i64(args, "accountId")).await?;
                 Ok(json!(
