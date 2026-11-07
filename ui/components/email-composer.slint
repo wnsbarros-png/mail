@@ -28,6 +28,7 @@ export component EmailComposer inherits Rectangle {
     in-out property <int> selected-account-id: -1;
     in property <[ComposeContact]> contact-suggestions: [];
     in property <[ComposeAttachment]> attachments: [];
+    in-out property <string> template-values;
     in property <[EmailTemplateRow]> templates: [];
     in property <string> attachment-summary: "";
     in-out property <string> cloud-provider;
@@ -617,6 +618,7 @@ export component EmailComposer inherits Rectangle {
         open <=> root.templates-open;
         compact: root.compact;
         templates: root.templates;
+        template-values <=> root.template-values;
         draft-subject: root.subject;
         draft-body: root.body;
         notice: root.notice;

@@ -1564,6 +1564,7 @@ impl CoreMailSource {
     }
 
     pub async fn list_email_templates(&self) -> Result<Vec<Snippet>, String> {
+        self.core.seed_template_examples().await.map_err(|e|e.to_string())?;
         self.core
             .list_snippets()
             .await

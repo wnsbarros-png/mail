@@ -609,6 +609,7 @@ export component SettingsDialog inherits Rectangle {
     callback set_close_to_tray(bool);
     callback ai-policy-settings;
     callback digest-settings;
+    callback followup-settings;
     callback set_launch_at_login(bool);
     callback sync_mail();
     callback sync_account(int);
@@ -1387,6 +1388,8 @@ export component SettingsDialog inherits Rectangle {
                                     }
                                 }
                             }
+
+                            Button {text:@tr("Follow-up reminders");clicked=>{root.followup-settings();}}
 
                             Rectangle {
                                 visible: !root.compact && DefaultEmailApp.status != "";

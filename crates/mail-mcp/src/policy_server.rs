@@ -75,6 +75,91 @@ impl Server {
             .ok_or_else(|| anyhow!("Unknown digest account"))?;
         self.call_tool_from_app("send_message",&json!({"accountId":account_id,"to":[account.email],"subject":format!("Resumo do dia / Daily digest — {}",digest.start),"body":digest.text()})).await
     }
+    /// Explicit native UI action only. A reminder itself never creates or queues mail.
+    pub async fn propose_followup(&self, message: i64) -> Result<Value> {
+        if self.pending_actions().await.len() >= 100 {
+            bail!("Too many pending actions");
+        }
+        let original = self
+            .core
+            .db
+            .read(move |c| flectar_mail_core::db::repo::messages::detail(c, message))
+            .await?;
+        let own = self
+            .core
+            .list_accounts()
+            .await?
+            .into_iter()
+            .map(|a| a.email.to_ascii_lowercase())
+            .collect::<Vec<_>>();
+        let draft = SaveDraftArgs {
+            draft_id: None,
+            account_id: original.account_id,
+            from: None,
+            to: original
+                .to
+                .into_iter()
+                .filter(|a| !own.contains(&a.email.to_ascii_lowercase()))
+                .collect(),
+            cc: original
+                .cc
+                .into_iter()
+                .filter(|a| !own.contains(&a.email.to_ascii_lowercase()))
+                .collect(),
+            bcc: vec![],
+            subject: reply_subject(&original.subject),
+            body_text: String::new(),
+            body_html: None,
+            mode: "reply".into(),
+            in_reply_to_message_id: Some(message),
+            in_reply_to_header: None,
+            attachments: vec![],
+        };
+        let mut ctx = self.draft_context(&draft, false).await?;
+        ctx.followup = true;
+        ctx.uses_template = true;
+        let d = self.decision(Action::Reply, &ctx).await;
+        self.record("desktop", Action::Reply, &ctx, &d, "requested", None)
+            .await?;
+        if d.effect == Effect::Block {
+            return self
+                .finish_record(
+                    "desktop",
+                    Action::Reply,
+                    &ctx,
+                    &d,
+                    Err(policy::Denied(d.clone()).into()),
+                )
+                .await;
+        }
+        let result = async {
+            let rendered = self.core.followup_suggestion(message).await?;
+            if !rendered.missing.is_empty() {
+                bail!("Fill template variables: {}", rendered.missing.join(", "));
+            }
+            if !self.core.mark_followup_drafted(message).await? {
+                bail!("Follow-up inactive or already proposed");
+            }
+            let result = self
+                .stage_or_send(
+                    SaveDraftArgs {
+                        body_text: rendered.body,
+                        ..draft
+                    },
+                    "followup",
+                    &d,
+                    &ctx,
+                )
+                .await;
+            if result.is_err() {
+                self.core.reset_followup_draft_failure(message).await?;
+            }
+            result
+        }
+        .await;
+        self.finish_record("desktop", Action::Reply, &ctx, &d, result)
+            .await
+    }
     pub async fn action_history(&self) -> Result<Vec<Event>> {
         let _guard = self.policy_io.lock().await;
         let store = self.policy_store.clone();
@@ -152,7 +237,11 @@ impl Server {
                     .ok_or_else(|| anyhow!("Missing category"))?,
             )?;
         }
-        let mut ctx = Context::default();
+        let mut ctx = Context {
+            uses_template: matches!(name, "send_message" | "reply_message")
+                && args.get("template_id").is_some(),
+            ..Default::default()
+        };
         let mut account = if matches!(
             name,
             "send_message"
@@ -163,6 +252,8 @@ impl Server {
                 | "sync_now"
                 | "get_digest"
                 | "get_triage"
+                | "list_followups"
+                | "render_template"
         ) {
             arg_i64(args, "accountId")
         } else {
@@ -221,7 +312,12 @@ impl Server {
             };
             if matches!(
                 name,
-                "read_message" | "download_attachment" | "get_triage" | "set_category"
+                "read_message"
+                    | "download_attachment"
+                    | "get_triage"
+                    | "set_category"
+                    | "set_followup"
+                    | "cancel_followup"
             ) && let Some(id) = arg_i64(args, "messageId")
             {
                 ids.push(id);
@@ -315,7 +411,7 @@ impl Server {
     }
     /// Native UI/scheduler entry; all policy and mandatory audit checks still apply.
     pub async fn call_tool_from_app(&self, name: &str, args: &Value) -> Result<Value> {
-        self.call_tool_as(name, args, "desktop_digest").await
+        self.call_tool_as(name, args, "desktop_app").await
     }
     async fn call_tool_as(&self, name: &str, args: &Value, actor: &str) -> Result<Value> {
         let action = if let Some(action) = Action::for_tool(name, args) {
@@ -385,7 +481,7 @@ impl Server {
         } else {
             self.dispatch(name, args, &decision, &ctx).await
         };
-        let result=result.map(|mut v|{if action==Action::Reply && decision.applied.iter().any(|r|r.action==Action::Read && r.effect==Effect::Ask) && v["status"]=="pending_confirmation" {v["summary"]=json!({"action":"reply","policy":decision,"note":"Review the original message and proposed reply in the desktop app."});}v});
+        let result=result.map(|mut v|{if matches!(action,Action::Send|Action::Reply) && decision.applied.iter().any(|r|r.action==Action::Read && r.effect==Effect::Ask) && v["status"]=="pending_confirmation" {v["summary"]=json!({"action":"send_or_reply","policy":decision,"note":"Review the original message and proposed reply in the desktop app."});}v});
         self.finish_record(actor, action, &ctx, &decision, result)
             .await
     }
@@ -442,8 +538,9 @@ impl Server {
     }
     async fn pending_decision(&self, p: &Pending) -> Result<(Context, Decision)> {
         let action = p.policy.applied[0].action;
-        let ctx = match &p.kind {
+        let mut ctx = match &p.kind {
             PendingKind::Send { draft_id, .. } => {
+                if p.context.followup {let draft=self.core.get_draft(*draft_id).await?;let original=draft.in_reply_to_message_id.ok_or_else(||anyhow!("Missing follow-up source"))?;let active=self.core.list_followups(Some(draft.account_id)).await?.into_iter().any(|f|f.message_id==original&&f.state=="drafted");if !active {bail!("Follow-up was cancelled or a reply arrived; proposal not sent");}}
                 self.draft_context(&self.core.get_draft(*draft_id).await?, false)
                     .await?
             }
@@ -463,6 +560,8 @@ impl Server {
             }
             PendingKind::Tool { name, args } => self.tool_context(name, args).await?,
         };
+        ctx.followup = p.context.followup;
+        ctx.uses_template = p.context.uses_template;
         let decision = self.decision(action, &ctx).await;
         Ok((ctx, decision))
     }

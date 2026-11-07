@@ -22,9 +22,10 @@ pub enum Action {
     Download,
     Sync,
     Categorize,
+    Followup,
     Control,
 }
-pub const ACTIONS: [Action; 12] = [
+pub const ACTIONS: [Action; 13] = [
     Action::List,
     Action::Read,
     Action::Search,
@@ -37,15 +38,18 @@ pub const ACTIONS: [Action; 12] = [
     Action::Download,
     Action::Sync,
     Action::Categorize,
+    Action::Followup,
 ];
 impl Action {
     pub fn for_tool(tool: &str, args: &serde_json::Value) -> Option<Self> {
         Some(match tool {
-            "list_accounts" | "list_folders" | "list_messages" => Self::List,
-            "read_message" | "get_new_messages" | "get_digest" | "get_triage" => Self::Read,
+            "list_accounts" | "list_folders" | "list_messages" | "list_templates" => Self::List,
+            "read_message" | "get_new_messages" | "get_digest" | "get_triage"
+            | "render_template" | "list_followups" => Self::Read,
             "search_messages" => Self::Search,
             "mark_read" => Self::MarkRead,
             "set_category" => Self::Categorize,
+            "set_followup" | "cancel_followup" => Self::Followup,
             "send_message" => Self::Send,
             "reply_message" => Self::Reply,
             "delete_message" => {
@@ -128,6 +132,8 @@ impl Default for Config {
 }
 #[derive(Clone, Debug, Default)]
 pub struct Context {
+    pub uses_template: bool,
+    pub followup: bool,
     pub accounts: Vec<i64>,
     pub recipients: Vec<String>,
     pub known_count: usize,
@@ -318,7 +324,7 @@ impl Config {
         }
         let (primary, override_new) = self.facet(a, c);
         let mut applied = vec![primary];
-        if a == Action::Reply {
+        if a == Action::Reply || (a == Action::Send && c.uses_template) {
             applied.push(self.facet(Action::Read, c).0);
         }
         if a == Action::Read && c.marks_read {
@@ -348,6 +354,9 @@ impl Config {
         if effect != Effect::Block && cloud {
             effect = Effect::Ask;
             reason = "invariant.cloud_requires_app_approval".into();
+        } else if effect != Effect::Block && c.followup {
+            effect = Effect::Ask;
+            reason = "invariant.followup_requires_app_approval".into();
         } else if effect == Effect::Allow
             && matches!(a, Action::Send | Action::Reply)
             && c.new_count > 0
@@ -360,7 +369,7 @@ impl Config {
             effect,
             applied,
             reason,
-            in_app_only: cloud,
+            in_app_only: cloud || c.followup,
             revision: self.revision,
             safe_fallback,
         }

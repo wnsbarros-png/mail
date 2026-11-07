@@ -12,6 +12,8 @@ mod attachment_controller;
 mod autostart;
 mod browser;
 #[cfg(desktop)]
+mod followup_controller;
+#[cfg(desktop)]
 mod triage_controller;
 pub use browser::ExternalUrlOpener;
 mod calendar;
@@ -2013,6 +2015,7 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
     app.set_sidebar_rows(Rc::clone(&initial_state.sidebar_rows).into());
     let state = Rc::new(RefCell::new(initial_state));
     #[cfg(desktop)]
+    let _followup_timer = followup_controller::register(&app, &state, &runtime);
     let _daily_digest_timer = triage_controller::register(&app, &state, &runtime);
     #[cfg(desktop)]
     let _ai_review_timer = ai_controller::register(&app, &state, &runtime, &platform.external_urls);
@@ -6120,6 +6123,7 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
     let templates_for_use = Rc::clone(&compose_templates);
     let document_for_template_use = Rc::clone(&compose_document);
     let editor_for_template_use = Rc::clone(&compose_editor);
+    let intent_for_template_use = Rc::clone(&compose_intent);
     app.on_use_email_template(move |id| {
         let Some(app) = app_weak.upgrade() else {
             return false;
@@ -6135,15 +6139,47 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
             return false;
         };
 
-        if app.get_compose_subject().trim().is_empty()
-            && let Some(subject) = template.subject.as_deref()
-            && !subject.trim().is_empty()
-        {
-            app.set_compose_subject(subject.into());
+        let rendered = (|| -> Result<flectar_mail_core::templates::Rendered, String> {
+            let values =
+                flectar_mail_core::templates::parse_values(&app.get_compose_template_values())
+                    .map_err(|e| e.to_string())?;
+            let source = state_for_template_use
+                .borrow()
+                .core
+                .clone()
+                .ok_or_else(|| "Mail engine unavailable".to_string())?;
+            let account = app.get_compose_account_id();
+            runtime_for_template_use
+                .block_on(source.file_core().render_email_template(
+                    template.id,
+                    Some(i64::from(account)),
+                    false,
+                    values,
+                ))
+                .map_err(|e| e.to_string())
+        })();
+        let rendered = match rendered {
+            Ok(r) => r,
+            Err(e) => {
+                app.set_compose_notice(UiMessage::detail("Fill template variables: {}", e));
+                app.set_compose_notice_is_error(true);
+                return false;
+            }
+        };
+        if !rendered.missing.is_empty() {
+            app.set_compose_notice(UiMessage::detail(
+                "Fill template variables: {}",
+                rendered.missing.join(", "),
+            ));
+            app.set_compose_notice_is_error(true);
+            return false;
+        }
+        if app.get_compose_subject().trim().is_empty() && !rendered.subject.trim().is_empty() {
+            app.set_compose_subject(rendered.subject.into());
         }
         {
             let mut document = document_for_template_use.borrow_mut();
-            let selection = document.insert_text(&template.body_text);
+            let selection = document.insert_text(&rendered.body);
             apply_rich_compose(
                 &app,
                 &document,
@@ -6875,6 +6911,17 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
         let Some(app) = app_weak.upgrade() else {
             return;
         };
+        if send {
+            let missing = flectar_mail_core::templates::unfilled(subject.as_str(), body.as_str());
+            if !missing.is_empty() {
+                app.set_compose_notice(UiMessage::detail(
+                    "Fill template variables: {}",
+                    missing.into_iter().collect::<Vec<_>>().join(", "),
+                ));
+                app.set_compose_notice_is_error(true);
+                return;
+            }
+        }
         if send_action_for_save.get().is_some() || app.get_compose_sending() {
             return;
         }

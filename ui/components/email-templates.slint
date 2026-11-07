@@ -8,6 +8,7 @@ import { TypeScale } from "../typography.slint";
 export component EmailTemplates inherits Rectangle {
     in-out property <bool> open: false;
     in property <bool> compact: false;
+    in-out property <string> template-values;
     in property <[EmailTemplateRow]> templates: [];
     in property <string> draft-subject: "";
     in property <string> draft-body: "";
@@ -177,7 +178,7 @@ export component EmailTemplates inherits Rectangle {
 
                 if root.templates.length == 0 : Text {
                     x: 20px;
-                    y: 82px;
+                    y: 180px;
                     width: parent.width - 40px;
                     text: @tr("No email templates yet");
                     color: root.muted-color;
@@ -186,11 +187,13 @@ export component EmailTemplates inherits Rectangle {
                     wrap: word-wrap;
                 }
 
+                Text {x:16px;y:52px;width:parent.width - 32px;height:28px;text:@tr("Variables: one name=value per line. Missing names appear in red. Account signature fills assinatura.");font-size:12px;wrap:word-wrap;color:root.muted-color;}
+                TextEdit {x:16px;y:84px;width:parent.width - 32px;height:64px;text<=>root.template-values;}
                 templates-list := ListView {
                     x: 12px;
-                    y: 60px;
+                    y: 158px;
                     width: parent.width - 24px;
-                    height: parent.height - 72px;
+                    height: parent.height - 170px;
                     content-width: self.visible-width;
                     horizontal-scrollbar-policy: always-off;
                     mouse-drag-pan-enabled: root.compact;

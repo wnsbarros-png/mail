@@ -16,6 +16,7 @@ pub mod error;
 pub mod events;
 mod file_io;
 pub mod files;
+pub mod followups;
 pub mod googlecal;
 pub mod graph;
 pub mod graphcal;
@@ -40,6 +41,7 @@ pub mod sender_identities;
 pub mod signatures;
 pub mod smtp;
 pub mod sync;
+pub mod templates;
 pub mod triage;
 pub mod unsubscribe;
 pub mod verification_code;
@@ -5235,6 +5237,14 @@ impl Core {
             .db
             .read(move |conn| {
                 let detail = repo::messages::detail(conn, draft_id)?;
+                crate::templates::ensure_filled(
+                    &detail.subject,
+                    &format!(
+                        "{}\n{}",
+                        detail.text_body.as_deref().unwrap_or_default(),
+                        detail.html_body.as_deref().unwrap_or_default()
+                    ),
+                )?;
                 let config = repo::accounts::get_config(conn, detail.account_id)?
                     .ok_or_else(|| CoreError::NotFound("account".into()))?;
                 let bcc: String = conn.query_row(

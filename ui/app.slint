@@ -41,6 +41,8 @@ import { CalendarEventDialog } from "dialogs/calendar-event-dialog.slint";
 import { ComposeDialog } from "dialogs/compose-dialog.slint";
 import { FolderDialog } from "dialogs/folder-dialog.slint";
 import { ConfirmationDialog } from "components/confirmation-dialog.slint";
+import { FollowupsDialog, FollowupRow } from "dialogs/followups-dialog.slint";
+export { FollowupRow } from "dialogs/followups-dialog.slint";
 import { DigestDialog, TriageRow } from "dialogs/digest-dialog.slint";
 export { TriageRow } from "dialogs/digest-dialog.slint";
 import { SettingsDialog } from "dialogs/settings-dialog.slint";
@@ -574,6 +576,8 @@ export global I18n {
         if (key == "Email template deleted.") { return @tr("Email template deleted."); }
         if (key == "Could not delete email template: {}") { return @tr("Could not delete email template: {}", argument); }
         if (key == "Email template is no longer available.") { return @tr("Email template is no longer available."); }
+        if (key == "Fill template variables: {}") { return @tr("Fill template variables: {}", argument); }
+        if (key == "Follow-up reminders are due. Open Settings, Follow-up reminders.") { return @tr("Follow-up reminders are due. Open Settings, Follow-up reminders."); }
         if (key == "Email template inserted.") { return @tr("Email template inserted."); }
         if (key == "Email template inserted, but its usage could not be saved: {}") { return @tr("Email template inserted, but its usage could not be saved: {}", argument); }
         if (key == "Choose a supported account type and connection security.") { return @tr("Choose a supported account type and connection security."); }
@@ -787,6 +791,15 @@ export component AppWindow inherits Window {
     in-out property <string> dropbox-app-key;
     in-out property <string> cloud-auth-account;
     callback cloud-connect(string,string,string);
+    in-out property <bool> followup-open;
+    in-out property <string> followup-message;
+    in-out property <string> followup-days: "3";
+    in-out property <string> followup-template;
+    in-out property <string> followup-status;
+    in-out property <[FollowupRow]> followup-rows;
+    in-out property <bool> followup-busy;
+    callback followup-command(string,int);
+    changed followup-open => {if root.followup-open {root.followup-command("refresh",0);}}
     in-out property <bool> digest-open;
     in-out property <bool> digest-busy;
     in-out property <string> digest-date;
@@ -1097,6 +1110,7 @@ export component AppWindow inherits Window {
     in-out property <string> compose_cc: "";
     in-out property <string> compose_bcc: "";
     in-out property <string> compose_subject: "";
+    in-out property <string> compose-template-values;
     in-out property <string> compose_body: "";
     in property <bool> compose_sending: false;
     in-out property <int> compose_account_id: -1;
@@ -2132,6 +2146,7 @@ export component AppWindow inherits Window {
             }
             clear_contact_suggestions => { return root.clear_contact_suggestions(); }
             set_close_to_tray(enabled) => { root.set_close_to_tray(enabled); }
+            followup-settings => {root.followup-open = true;}
             digest-settings => {root.digest-open = true;}
             ai-policy-settings => {root.ai-policy-open = true;}
             set_launch_at_login(enabled) => { root.set_launch_at_login(enabled); }
@@ -2208,6 +2223,7 @@ export component AppWindow inherits Window {
             compose_contact_suggestions: root.compose_contact_suggestions;
             compose_attachments: root.compose_attachments;
             compose_templates: root.compose_templates;
+            template-values <=> root.compose-template-values;
             compose_attachment_summary: root.compose_attachment_summary;
             cloud-provider <=> root.compose-cloud-provider;
             cloud-account <=> root.compose-cloud-account;
@@ -2479,6 +2495,12 @@ export component AppWindow inherits Window {
         }
     }
 
+    if root.followup-open: Rectangle {x:0;y:0;width:parent.width;height:parent.height;background:#0008;z:19610;
+        FollowupsDialog {x:max(8px,(parent.width - self.width)/2);y:max(8px,(parent.height - self.height)/2);width:min(980px,parent.width - 16px);height:min(780px,parent.height - 16px);
+            message<=>root.followup-message;days<=>root.followup-days;template<=>root.followup-template;status:root.followup-status;rows:root.followup-rows;busy:root.followup-busy;
+            command(c,id)=>{root.followup-command(c,id);}close=>{root.followup-open=false;}
+        }
+    }
     if root.digest-open: Rectangle {x:0;y:0;width:parent.width;height:parent.height;background:#0008;z:19600;
         DigestDialog {x:30px;y:30px;width:parent.width - 60px;height:parent.height - 60px;
             date<=>root.digest-date;time<=>root.digest-time;email-self<=>root.digest-email-self;enhance<=>root.digest-enhance;account<=>root.digest-account;filter<=>root.digest-filter;
