@@ -365,4 +365,78 @@ mod tests {
 
         assert_eq!(CATEGORIES[0], triage::Category::Urgent);
     }
+    async fn source() -> (crate::mail::CoreMailSource, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let source = crate::mail::CoreMailSource::start(
+            flectar_mail_core::config::Paths::for_tests(dir.path()),
+            Arc::new(flectar_mail_core::accounts::credentials::UnavailableCredentialStore),
+            Arc::new(flectar_mail_core::oauth::redirect::LoopbackRedirectBroker::default()),
+        )
+        .await
+        .unwrap();
+        (source, dir)
+    }
+    #[tokio::test]
+    async fn native_read_ask_reuses_one_proposal_then_approved_result() {
+        use mail_mcp::policy::{Action, Effect};
+        let (source, _dir) = source().await;
+        let server = source.ai_server();
+        let mut config = server.policy_config().await.0;
+        config.defaults.insert(Action::Read, Effect::Ask);
+        server.save_policy(config).await.unwrap();
+        let ticket: ReadTicket = Arc::new(Mutex::new(None));
+        let day = triage::today();
+        let settings = Settings::default();
+        assert!(
+            read_digest(&source, &day, &settings, &ticket)
+                .await
+                .is_err()
+        );
+        assert!(
+            read_digest(&source, &day, &settings, &ticket)
+                .await
+                .is_err()
+        );
+        assert_eq!(server.pending_actions().await.len(), 1);
+        let pending = server.pending_actions().await;
+        server
+            .approve_in_app(pending[0]["pendingId"].as_str().unwrap())
+            .await
+            .unwrap();
+        let result = read_digest(&source, &day, &settings, &ticket)
+            .await
+            .unwrap();
+        assert!(result.items.is_empty());
+        assert!(ticket.lock().unwrap().is_none());
+        config = server.policy_config().await.0;
+        config.defaults.insert(Action::Read, Effect::Block);
+        server.save_policy(config).await.unwrap();
+        assert!(
+            read_digest(&source, &day, &settings, &ticket)
+                .await
+                .is_err()
+        );
+    }
+    #[tokio::test]
+    async fn native_scheduler_claim_survives_settings_changes_without_email() {
+        let (source, _dir) = source().await;
+        let core = source.file_core();
+        core.save_digest_settings(Settings {
+            time: "00:00".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let ticket: ReadTicket = Arc::new(Mutex::new(None));
+        assert!(daily_tick(&source, &ticket).await.unwrap().is_some());
+        assert!(daily_tick(&source, &ticket).await.unwrap().is_none());
+        assert!(source.ai_server().pending_actions().await.is_empty());
+        core.save_digest_settings(Settings {
+            time: "00:01".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        assert!(daily_tick(&source, &ticket).await.unwrap().is_none());
+    }
 }
