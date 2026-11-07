@@ -1175,3 +1175,219 @@ async fn download_cannot_seed_policy_files_even_when_rule_allows_downloads() {
         );
     }
 }
+
+async fn triage_fixture(core: &Core) {
+    core.db.write(|c|{c.execute_batch("INSERT INTO accounts (id,email,provider,auth_kind,username,incoming_host,incoming_port,smtp_host,smtp_port,created_at,mail_protocol,settings_json) VALUES (2,'second@example.invalid','generic','password','second','invalid',993,'invalid',587,0,'imap','{}');")?;let date=chrono::Local::now().timestamp_millis();for (id,account,sender,subject)in[(100,1,"client@example.invalid","Boleto de pagamento"),(101,1,"client@example.invalid","Urgente: prazo hoje"),(102,2,"client@example.invalid","Outra conta"),(103,1,"news@example.invalid","Novidades"),(104,1,"supplier@example.invalid","Documento"),(105,1,"known@example.invalid","Olá")]{c.execute("INSERT INTO messages(id,account_id,from_addr,subject,snippet,date,list_unsubscribe) VALUES(?1,?2,?3,?4,'metadata only',?5,?6)",(id,account,sender,subject,date,if id==103{"<https://example.invalid/unsubscribe>"}else{""}))?;}c.execute("INSERT INTO attachments(message_id,filename,mime_type) VALUES(104,'nfe-proc.xml','application/xml')",[])?;c.execute("INSERT INTO contacts(email,send_count,recv_count,last_interacted) VALUES('known@example.invalid',1,0,0)",[])?;Ok(())}).await.unwrap();
+}
+
+#[tokio::test]
+async fn digest_triage_correction_approval_and_sender_scope() {
+    use flectar_mail_core::triage::{Category, Digest};
+    use mail_mcp::policy::{Action, Effect};
+    let (server, core, dir) = fixture(AiConfig::default()).await;
+    triage_fixture(&core).await;
+    let original = server.call_tool("get_digest", &json!({})).await.unwrap();
+    assert_eq!(original["policy"]["effect"], "allow");
+    let digest: Digest = serde_json::from_value(original).unwrap();
+    assert_eq!(digest.items.len(), 6);
+    assert_eq!(
+        digest
+            .items
+            .iter()
+            .find(|i| i.message_id == 100)
+            .unwrap()
+            .category,
+        Category::Finance
+    );
+    assert_eq!(
+        digest
+            .items
+            .iter()
+            .find(|i| i.message_id == 103)
+            .unwrap()
+            .category,
+        Category::Newsletter
+    );
+    assert_eq!(
+        digest
+            .items
+            .iter()
+            .find(|i| i.message_id == 104)
+            .unwrap()
+            .category,
+        Category::Invoice
+    );
+    assert_eq!(
+        digest
+            .items
+            .iter()
+            .find(|i| i.message_id == 105)
+            .unwrap()
+            .category,
+        Category::Customer
+    );
+    let staged = server
+        .call_tool(
+            "set_category",
+            &json!({"messageId":100,"category":"customer"}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(staged["policy"]["effect"], "ask");
+    let before = core
+        .get_digest(
+            flectar_mail_core::triage::today(),
+            flectar_mail_core::triage::today(),
+            Some(1),
+            Some(100),
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(before.items[0].category, Category::Finance);
+    server
+        .approve_in_app(staged["pendingId"].as_str().unwrap())
+        .await
+        .unwrap();
+    let after = server
+        .call_tool("get_triage", &json!({"accountId":1,"messageId":101}))
+        .await
+        .unwrap();
+    assert_eq!(after["items"][0]["category"], "customer");
+    assert_eq!(after["items"][0]["reason"], "sender.correction");
+    let other = server
+        .call_tool("get_triage", &json!({"messageId":102}))
+        .await
+        .unwrap();
+    assert_eq!(other["items"][0]["category"], "other");
+    let mut config = server.policy_config().await.0;
+    config.defaults.insert(Action::Categorize, Effect::Block);
+    server.save_policy(config).await.unwrap();
+    assert!(
+        server
+            .call_tool(
+                "set_category",
+                &json!({"messageId":100,"category":"invoice"})
+            )
+            .await
+            .is_err()
+    );
+    let history = std::fs::read_to_string(dir.path().join("ai-history.jsonl")).unwrap();
+    assert!(history.contains("categorize"));
+    assert!(!history.contains("Boleto"));
+    assert!(!history.contains("client@example.invalid"));
+    assert!(!history.contains("metadata only"));
+    assert!(!history.contains("nfe-proc"));
+}
+
+#[tokio::test]
+async fn digest_persistence_safe_defaults_schedule_and_boundaries() {
+    use flectar_mail_core::triage::{self, Settings};
+    let (_, core, _dir) = fixture(AiConfig::default()).await;
+    let defaults = core.digest_settings().await.unwrap();
+    assert_eq!(defaults.time, "08:00");
+    assert!(!defaults.email_to_self);
+    assert!(!defaults.ai_enhancement);
+    let settings = Settings {
+        time: "09:30".into(),
+        email_to_self: true,
+        account_id: Some(1),
+        ..Default::default()
+    };
+    core.save_digest_settings(settings).await.unwrap();
+    assert_eq!(core.digest_settings().await.unwrap().time, "09:30");
+    assert!(core.claim_daily_digest("2026-11-06".into()).await.unwrap());
+    assert!(!core.claim_daily_digest("2026-11-06".into()).await.unwrap());
+    assert!(core.claim_daily_digest("2026-11-07".into()).await.unwrap());
+    core.db
+        .write(|c| {
+            c.execute("UPDATE ai_digest_settings SET value='bad json'", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    assert!(!core.digest_settings().await.unwrap().email_to_self);
+    let day = chrono::NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
+    use chrono::TimeZone;
+    let at = chrono::Local
+        .from_local_datetime(&day.and_hms_opt(8, 0, 0).unwrap())
+        .unwrap();
+    assert!(triage::due(at, &defaults));
+    assert!(!triage::due(at - chrono::Duration::seconds(1), &defaults));
+    assert!(
+        core.get_digest("2026-11-01".into(), "2026-12-31".into(), None, None, false)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn digest_account_policy_cannot_be_narrowed_by_ignored_fields() {
+    use mail_mcp::policy::{Action, Conditions, Effect, Rule};
+    let (server, core, _dir) = fixture(AiConfig::default()).await;
+    triage_fixture(&core).await;
+    let mut config = server.policy_config().await.0;
+    config.rules.push(Rule {
+        id: "block.second".into(),
+        action: Action::Read,
+        effect: Effect::Block,
+        conditions: Conditions {
+            accounts: vec![2],
+            ..Default::default()
+        },
+        override_new_recipients: false,
+    });
+    server.save_policy(config).await.unwrap();
+    assert!(
+        server
+            .call_tool("get_digest", &json!({"messageId":100}))
+            .await
+            .is_err()
+    );
+    assert!(
+        server
+            .call_tool("get_digest", &json!({"accountId":1}))
+            .await
+            .is_ok()
+    );
+    assert!(
+        server
+            .call_tool("get_triage", &json!({"messageId":102}))
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn daily_self_email_stays_pending_without_network() {
+    let (server, core, _dir) = fixture(AiConfig::default()).await;
+    let v=server.call_tool_from_app("send_message",&json!({"accountId":1,"to":["me@example.invalid"],"subject":"Synthetic digest","body":"Synthetic counts only"})).await.unwrap();
+    assert_eq!(v["status"], "pending_confirmation");
+    assert_eq!(server.pending_actions().await.len(), 1);
+    let draft = core
+        .get_draft(v["draftId"].as_i64().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(draft.to.len(), 1);
+    assert_eq!(draft.to[0].email, "me@example.invalid");
+    server
+        .cancel_in_app(v["pendingId"].as_str().unwrap())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn digest_caps_results_and_excludes_outgoing_and_other_dates() {
+    let (server, core, _dir) = fixture(AiConfig::default()).await;
+    core.db.write(|c|{let date=chrono::Local::now().timestamp_millis();let tx=c.transaction()?;for id in 1..=5002{tx.execute("INSERT INTO messages(id,account_id,from_addr,subject,date) VALUES(?1,1,'synthetic@example.invalid','Local metadata',?2)",(id,date))?;}tx.execute("INSERT INTO messages(id,account_id,date,is_outgoing) VALUES(6000,1,?1,1)",[date])?;tx.execute("INSERT INTO messages(id,account_id,date,is_draft) VALUES(6001,1,?1,1)",[date])?;tx.execute("INSERT INTO messages(id,account_id,date) VALUES(6002,1,0)",[])?;tx.commit()?;Ok(())}).await.unwrap();
+    let v = server.call_tool("get_digest", &json!({})).await.unwrap();
+    assert_eq!(v["truncated"], true);
+    assert_eq!(v["items"].as_array().unwrap().len(), 5000);
+    assert!(
+        v["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|i| i["message_id"].as_i64().unwrap() <= 5002)
+    );
+}

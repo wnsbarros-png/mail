@@ -232,3 +232,63 @@ msgstr "Recarregar regras e histórico"
 
 msgid "Restore safe defaults"
 msgstr "Restaurar padrões seguros"
+
+msgid "Daily digest and triage"
+msgstr "Resumo do dia e triagem"
+
+msgid "Urgent"
+msgstr "Urgente"
+
+msgid "Customer"
+msgstr "Cliente"
+
+msgid "Billing and finance"
+msgstr "Cobrança e financeiro"
+
+msgid "Invoice"
+msgstr "Nota fiscal"
+
+msgid "Marketing and newsletter"
+msgstr "Propaganda e newsletter"
+
+msgid "Other"
+msgstr "Outros"
+
+msgid "Local mail metadata only. Open a message or correct its category; corrections are remembered for this sender and account."
+msgstr "Somente metadados locais. Abra a mensagem ou corrija a categoria; a correção será lembrada para este remetente nesta conta."
+
+msgid "Date (YYYY-MM-DD)"
+msgstr "Data (AAAA-MM-DD)"
+
+msgid "Refresh"
+msgstr "Atualizar"
+
+msgid "All categories"
+msgstr "Todas as categorias"
+
+msgid "Daily time (local)"
+msgstr "Horário diário (local)"
+
+msgid "Email digest to myself"
+msgstr "Enviar resumo para mim"
+
+msgid "Account ID"
+msgstr "ID da conta"
+
+msgid "Save settings"
+msgstr "Salvar configurações"
+
+msgid "Optional AI enhancement: send unresolved subject, sender and snippet to my configured AI provider"
+msgstr "IA opcional: enviar assunto, remetente e trecho sem categoria ao meu provedor de IA configurado"
+
+msgid "Email is off by default; only the selected account's own address is allowed. Approval rules apply. The app must be open."
+msgstr "Envio desativado por padrão; permitido somente para o próprio endereço da conta escolhida. As regras de aprovação se aplicam. O aplicativo precisa estar aberto."
+
+msgid "Open message"
+msgstr "Abrir mensagem"
+
+msgid "Save category"
+msgstr "Salvar categoria"
+
+msgid "Correct triage category"
+msgstr "Corrigir categoria de triagem"

@@ -312,6 +312,16 @@ fn readable_summary(s: &Value) -> String {
             visible(s["tool"].as_str().unwrap_or_default()),
             s["accountIds"]
         ));
+        if s["tool"] == "set_category" {
+            let category = s["request"].get("category").cloned().and_then(|v| {
+                serde_json::from_value::<flectar_mail_core::triage::Category>(v).ok()
+            });
+            out.push_str(&format!(
+                "Categoria / Category: {}\n",
+                category.map(|c| c.label()).unwrap_or("Inválida / Invalid")
+            ));
+            out.push_str("Esta correção será lembrada para o remetente nesta conta, inclusive mensagens futuras. / Remember this sender correction in this account, including future messages.\n");
+        }
         for key in [
             "messageId",
             "messageIds",
@@ -319,6 +329,10 @@ fn readable_summary(s: &Value) -> String {
             "folder",
             "filename",
             "read",
+            "date",
+            "start",
+            "end",
+            "enhance",
         ] {
             if let Some(value) = s["request"].get(key) {
                 out.push_str(&format!("{key}: {}\n", visible(&value.to_string())));
@@ -515,5 +529,86 @@ mod tests {
             )
             .unwrap();
         assert!(app.get_ai_policy_open());
+    }
+    #[test]
+    #[ignore = "writes a synthetic digest screenshot; run explicitly with --exact"]
+    fn daily_digest_screenshot() {
+        let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+        slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
+        let app = AppWindow::new().unwrap();
+        app.set_startup_ready(true);
+        app.set_startup_hydrated(true);
+        slint::select_bundled_translation("pt_BR").unwrap();
+        app.set_digest_open(true);
+        app.set_digest_date("2026-11-06".into());
+        app.set_digest_time("08:00".into());
+        app.set_digest_account("1".into());
+        app.set_digest_summary("6 mensagens locais · America/Cuiaba (UTC-4)\nUrgente: 1 · Cliente: 1 · Financeiro: 1 · Nota fiscal: 1 · Newsletter: 1 · Outros: 1".into());
+        app.set_digest_status(
+            "Dados sintéticos. Nenhuma conta real, consulta de IA, upload ou e-mail enviado."
+                .into(),
+        );
+        let rows = vec![
+            (
+                "Urgente",
+                "Prazo de revisão termina hoje",
+                "cliente@example.invalid",
+            ),
+            (
+                "Cliente",
+                "Orçamento para a próxima etapa",
+                "compras@example.invalid",
+            ),
+            (
+                "Cobrança e financeiro",
+                "Boleto disponível para conferência",
+                "financeiro@example.invalid",
+            ),
+            (
+                "Nota fiscal",
+                "NF-e recebida: nfe-proc.xml",
+                "fiscal@example.invalid",
+            ),
+            (
+                "Propaganda e newsletter",
+                "Novidades da semana",
+                "news@example.invalid",
+            ),
+            ("Outros", "Informação geral", "info@example.invalid"),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(i, (category, subject, sender))| crate::TriageRow {
+            id: i as i32 + 1,
+            sender: sender.into(),
+            subject: subject.into(),
+            category: category.into(),
+            category_index: i as i32,
+            unread: true,
+        })
+        .collect::<Vec<_>>();
+        app.set_digest_rows(ModelRc::new(VecModel::from(rows)));
+        app.window()
+            .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.0 });
+        app.window().set_size(slint::PhysicalSize::new(1440, 1100));
+        app.show().unwrap();
+        let mut pixels = vec![slint::Rgb8Pixel::default(); 1440 * 1100];
+        for _ in 0..3 {
+            slint::platform::update_timers_and_animations();
+            app.window().request_redraw();
+            window.draw_if_needed(|renderer| {
+                renderer.render(&mut pixels, 1440);
+            });
+        }
+        let bytes = pixels.iter().flat_map(|p| [p.r, p.g, p.b]).collect();
+        image::RgbImage::from_raw(1440, 1100, bytes)
+            .unwrap()
+            .save(
+                std::env::var_os("MAIL_DIGEST_SCREENSHOT")
+                    .unwrap_or_else(|| "daily-digest-pt-BR.png".into()),
+            )
+            .unwrap();
+        assert!(app.get_digest_open());
+        assert!(!app.get_digest_email_self());
     }
 }

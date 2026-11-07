@@ -128,6 +128,14 @@ impl Server {
         .await
     }
     async fn tool_context(&self, name: &str, args: &Value) -> Result<Context> {
+        if name == "set_category" {
+            req_i64(args, "messageId")?;
+            let _: flectar_mail_core::triage::Category = serde_json::from_value(
+                args.get("category")
+                    .cloned()
+                    .ok_or_else(|| anyhow!("Missing category"))?,
+            )?;
+        }
         let mut ctx = Context::default();
         let mut account = if matches!(
             name,

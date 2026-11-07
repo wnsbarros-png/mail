@@ -350,6 +350,7 @@ export component MailListPane inherits FocusScope {
     callback set_search_filter(string);
     callback load_more();
     callback sync_mail();
+    callback daily-digest;
     callback open_folders();
     callback open_compose();
     callback message_action_for_email(int, string);
@@ -665,6 +666,8 @@ export component MailListPane inherits FocusScope {
                             refresh => { root.sync_mail(); }
                         }
                     }
+
+                    Button {text:@tr("Daily digest and triage");height:32px;clicked=>{root.daily-digest();}}
 
                     bulk-toolbar := Rectangle {
                         height: root.bulk-toolbar-height;

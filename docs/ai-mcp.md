@@ -581,3 +581,112 @@ drafts for manual cleanup. There is no attachment path sandbox; trust connected
 MCP clients. No new installer, final branding, Windows/macOS validation or real
 mailbox validation is supplied by this phase. Replace original branding before
 distributing a personalized build and follow AGPL-3.0 obligations.
+
+## Resumo do dia e triagem (pt-BR)
+
+Abra **Resumo do dia e triagem** na caixa de mensagens ou em Configurações → Geral.
+Categorias: **Urgente**, **Cliente**, **Cobrança e financeiro**, **Nota fiscal**,
+**Propaganda e newsletter**, **Outros**. O filtro mostra até 200 mensagens por categoria;
+**Abrir mensagem** volta ao leitor normal. Escolha uma categoria e **Salvar categoria**:
+por padrão é criada uma proposta no painel de aprovação. Feche o resumo, aprove a
+correção no aplicativo e atualize a lista. A correção é lembrada para o remetente
+(não diferencia maiúsculas/minúsculas), somente naquela conta, inclusive mensagens futuras.
+Não move pastas nem altera rótulos IMAP. A regra **Corrigir categoria de triagem** pode
+permitir, perguntar ou bloquear correções MCP/aplicativo; eventos são registrados sem conteúdo.
+
+A classificação funciona **sem chave de IA**: correções manuais prevalecem; depois,
+urgência/prazo de hoje, indícios de NF-e (assunto ou nome de anexo XML compatível),
+boletos/faturas/pagamentos, `List-Unsubscribe` e rótulos automáticos existentes
+Marketing/News/Social/Pitch, contatos salvos ou remetentes com histórico de envio e
+palavras-chave em português/inglês. É uma heurística, não prova de urgência, segurança ou
+validade fiscal. Não abre XML nem baixa anexos/corpos. Assunto/trecho/remetente são
+limitados; valores completos permanecem na mensagem original.
+
+**Horário diário (local)** começa em **08:00**, usa o fuso do computador e funciona
+somente enquanto o aplicativo está aberto (inclusive minimizado). Verifica a cada
+30 segundos; se abrir depois do horário, gera o resumo do dia atual. Não recupera dias
+em que ficou fechado. Uma marca SQLite por data impede duplicação após reinício,
+mudança de horário ou relógio voltando: a marca ocorre antes da proposta; falhas/crash
+não são repetidos automaticamente naquele dia. O resumo fica na visualização e uma
+notificação do sistema, sem assunto ou remetente, avisa que está pronto. A notificação
+pode depender das permissões do sistema. A visualização é recalculada com os metadados
+locais atuais, não é um arquivo histórico imutável; correspondência ainda não sincronizada
+não aparece. Dias usam limites locais; períodos inválidos são rejeitados.
+
+**Enviar resumo para mim** fica **desativado**. Ao ativar, escolha o **ID da conta**
+(`list_accounts`); o destino é obtido internamente do endereço dessa conta e não é
+editável. O envio usa `send_message`, a mesma política central, histórico e painel de
+aprovação. Padrão: perguntar; uma política explicitamente permissiva pode enfileirar o
+envio sem outra confirmação, sujeita à proteção para destinatário novo. Nenhum envio é
+repetido automaticamente por erro. Alterar configurações não dispara envio imediato.
+
+**IA opcional** fica desativada. Quando ativada, o provedor/modelo da configuração
+OpenAI-compatible existente para categorização recebe somente remetente, assunto e
+um trecho limitado de até 20 itens ainda classificados como Outros por consulta.
+Correções e decisões heurísticas não são sobrescritas. Falta de chave, falha ou resposta
+fora do enum conserva a classificação local. Conteúdo de e-mail é dado não confiável;
+a chamada não recebe ferramentas e não pode executar instruções da mensagem.
+
+Ferramentas novas (todas passam pela política e pelo histórico sem corpos):
+
+```json
+{"name":"get_digest","arguments":{"date":"2026-11-06","accountId":1}}
+{"name":"get_digest","arguments":{"start":"2026-11-01","end":"2026-11-06"}}
+{"name":"get_triage","arguments":{"date":"2026-11-06","messageId":100}}
+{"name":"set_category","arguments":{"messageId":100,"category":"invoice"}}
+```
+
+`get_digest` e `get_triage`: padrão hoje, datas inclusivas `YYYY-MM-DD`, até 31 dias,
+5000 mensagens recebidas locais (não rascunhos/enviadas), `truncated` explícito,
+`accountId` opcional e `enhance:true` somente com opt-in salvo. `get_triage` aceita
+`messageId`; para mensagem antiga inclua seu dia/período. Respostas trazem categoria,
+origem (`reason`), contagens, fuso e a regra aplicada. Padrão de leitura: permitir;
+se Perguntar, obtenha a resposta com `get_action_result` após aprovação, em vez de
+repetir a chamada. `set_category`: `urgent`, `customer`, `finance`, `invoice`,
+`newsletter`, `other`; padrão Perguntar. Preferências versionadas e correções ficam
+no SQLite do perfil; configuração inválida retorna a 08:00, sem IA e sem envio.
+Não usa rotinas da plataforma nem exige serviço adicional. Captura sintética:
+`docs/images/daily-digest-pt-BR.png`.
+
+## Daily digest and triage (English)
+
+Open **Daily digest and triage** in the mailbox or Settings → General. The six
+categories are Urgent, Customer, Billing and finance, Invoice, Marketing and newsletter,
+and Other. Filter the triage mailbox, open a message in the existing reader, or save a
+category correction. Corrections default to an approval proposal: close the digest,
+approve in the app's review panel, then refresh. A case-insensitive sender correction
+wins for this account, including future messages; it does not move mail or change IMAP
+labels. The new Categorize action has independent Allow/Ask/Block policy controls.
+
+No AI key is needed: deterministic PT/EN keyword rules, urgency, NF-e-like XML attachment
+names, billing, List-Unsubscribe, existing Marketing/News/Social/Pitch automatic labels,
+saved contacts and prior outgoing contact history are used. It never fetches message
+bodies or attachments. Classification is not a security, urgency or tax-document guarantee.
+The default schedule is **08:00 computer-local time**, checked every 30 seconds while the
+app is running/minimized. Opening later catches up today only. A durable per-local-day
+claim prevents duplicate notification/email proposals across restarts and clock changes;
+it is written before generation, so crashes/failures are not retried automatically that
+day. OS notification contains no mail content. The view is recalculated from currently
+synced local incoming mail, not an immutable archived snapshot; up to 200 rows per filter.
+
+**Email digest to myself** defaults OFF. Select an account ID; its own stored address is
+the sole destination, never an editable recipient. Proposals use the same `send_message`
+policy, new-recipient safeguard, history and review panel. Ask is the default; an explicitly
+permissive policy may queue without another confirmation. No automatic email retries.
+Changing settings does not send immediately. **Optional AI enhancement** also defaults OFF;
+when enabled, the existing OpenAI-compatible Categorize configuration receives bounded
+sender/subject/snippet metadata for at most 20 otherwise-Other items per request. No tools
+are exposed; corrections/heuristic decisions are never replaced; unavailable/invalid AI
+responses retain the local category.
+
+MCP: `get_digest` and `get_triage` default to today's local date; accept `date` or inclusive
+`start`/`end` (YYYY-MM-DD, 1–31 days), optional `accountId`, and `enhance:true` only with saved
+opt-in. `get_triage` additionally accepts `messageId` (include the date/range for old mail).
+Both return up to 5000 incoming/non-draft messages, explicit truncation, counts, reason and
+policy metadata. Reads default Allow; retrieve an approved Ask result with
+`get_action_result`, rather than re-proposing. `set_category` accepts messageId and category
+`urgent|customer|finance|invoice|newsletter|other`, defaults Ask, and remembers the sender in
+that account. All three tools use the central evaluator and content-free history. Versioned
+settings, corrections and daily claims live in profile SQLite. Invalid settings fail back
+to 08:00, email OFF, AI OFF. No hosted routines/service, no real accounts needed in tests.
+Synthetic screenshot: `docs/images/daily-digest-pt-BR.png`.
