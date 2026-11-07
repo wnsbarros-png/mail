@@ -289,6 +289,7 @@ fn readable_summary(s: &Value) -> String {
     let action = match s["action"].as_str().unwrap_or_default() {
         "send_cloud_links" => "Enviar email com links de arquivos",
         "send" => "Enviar email",
+        "followup" => "Retorno de mensagem sem resposta / Follow-up for an unanswered message",
         "reply" => "Responder email",
         "reply_all" => "Responder a todos",
         "move_to_trash" => "Mover para a lixeira",
@@ -333,6 +334,8 @@ fn readable_summary(s: &Value) -> String {
             "start",
             "end",
             "enhance",
+            "days",
+            "template_id",
         ] {
             if let Some(value) = s["request"].get(key) {
                 out.push_str(&format!("{key}: {}\n", visible(&value.to_string())));
@@ -404,7 +407,7 @@ mod tests {
         Platform, WindowAdapter, WindowEvent,
         software_renderer::{MinimalSoftwareWindow, RepaintBufferType},
     };
-    use slint::{ModelRc, VecModel};
+    use slint::{Model, ModelRc, VecModel};
     struct Headless(Rc<MinimalSoftwareWindow>);
     impl Platform for Headless {
         fn create_window_adapter(&self) -> Result<Rc<dyn WindowAdapter>, slint::PlatformError> {
@@ -610,5 +613,70 @@ mod tests {
             .unwrap();
         assert!(app.get_digest_open());
         assert!(!app.get_digest_email_self());
+    }
+    #[test]
+    #[ignore = "writes synthetic follow-up screenshot; run explicitly"]
+    fn followup_screenshot() {
+        let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+        slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
+        let app = AppWindow::new().unwrap();
+        app.set_startup_ready(true);
+        app.set_startup_hydrated(true);
+        slint::select_bundled_translation("pt_BR").unwrap();
+        app.set_followup_open(true);
+        app.set_followup_message("900".into());
+        app.set_followup_days("3".into());
+        app.set_followup_status("Dados sintéticos. Nenhuma conta real ou envio. Modelos editáveis na janela de composição.".into());
+        app.set_followup_rows(ModelRc::new(VecModel::from(vec![
+            crate::FollowupRow {
+                id: 900,
+                subject: "Orçamento · aguardando retorno do cliente".into(),
+                due: "06/11/2026 08:00 UTC-4".into(),
+                state: "Resposta pendente".into(),
+                active: true,
+                can_propose: true,
+            },
+            crate::FollowupRow {
+                id: 901,
+                subject: "Segunda via de boleto · vencimento confirmado".into(),
+                due: "09/11/2026 08:00 UTC-4".into(),
+                state: "Aguardando resposta".into(),
+                active: true,
+                can_propose: false,
+            },
+            crate::FollowupRow {
+                id: 902,
+                subject: "Confirmação de pagamento · cliente já respondeu".into(),
+                due: "05/11/2026 08:00 UTC-4".into(),
+                state: "Respondido".into(),
+                active: false,
+                can_propose: false,
+            },
+        ])));
+        app.window()
+            .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.0 });
+        app.window().set_size(slint::PhysicalSize::new(1440, 1100));
+        app.show().unwrap();
+        let mut pixels = vec![slint::Rgb8Pixel::default(); 1440 * 1100];
+        for _ in 0..3 {
+            slint::platform::update_timers_and_animations();
+            app.window().request_redraw();
+            window.draw_if_needed(|r| {
+                r.render(&mut pixels, 1440);
+            });
+        }
+        image::RgbImage::from_raw(
+            1440,
+            1100,
+            pixels.iter().flat_map(|p| [p.r, p.g, p.b]).collect(),
+        )
+        .unwrap()
+        .save(
+            std::env::var_os("MAIL_FOLLOWUP_SCREENSHOT")
+                .unwrap_or_else(|| "followups-pt-BR.png".into()),
+        )
+        .unwrap();
+        assert!(app.get_followup_open());
+        assert_eq!(app.get_followup_rows().row_count(), 3);
     }
 }

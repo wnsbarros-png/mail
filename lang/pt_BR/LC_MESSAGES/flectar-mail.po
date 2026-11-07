@@ -292,3 +292,111 @@ msgstr "Salvar categoria"
 
 msgid "Correct triage category"
 msgstr "Corrigir categoria de triagem"
+
+msgid "Follow-up reminders"
+msgstr "Lembretes de resposta"
+
+msgid "Manage follow-up reminders"
+msgstr "Gerenciar lembretes de resposta"
+
+msgid "Fill template variables: {}"
+msgstr "Preencha as variáveis do modelo: {}"
+
+msgid "Follow-up reminders are due. Open Settings, Follow-up reminders."
+msgstr "Há respostas pendentes. Abra Configurações, Lembretes de resposta."
+
+msgid "Variables: one name=value per line. Missing names appear in red. Account signature fills assinatura."
+msgstr "Variáveis: nome=valor, uma por linha. As ausentes aparecem em vermelho. A assinatura da conta preenche assinatura."
+
+msgid "Select an actually sent message, then wait for a reply. Reminders never send mail automatically. The app must be open; overdue reminders appear after restart."
+msgstr "Selecione uma mensagem realmente enviada e aguarde a resposta. Lembretes nunca enviam e-mails automaticamente. O aplicativo precisa estar aberto; pendências aparecem após reiniciar."
+
+msgid "Templates: create, edit or delete in Compose, Templates. Variables use {{nome}}, {{valor}}, {{data}}, {{vencimento}}, {{empresa}}, {{assinatura}} or custom names. Configure signatures per account in Settings."
+msgstr "Modelos: crie, edite ou exclua em Escrever, Modelos. Use {{nome}}, {{valor}}, {{data}}, {{vencimento}}, {{empresa}}, {{assinatura}} ou nomes personalizados. Configure assinaturas por conta em Configurações."
+
+msgid "Sent message ID"
+msgstr "ID da mensagem enviada"
+
+msgid "Use selected message"
+msgstr "Usar mensagem selecionada"
+
+msgid "Days (1–365)"
+msgstr "Dias (1–365)"
+
+msgid "Optional template ID"
+msgstr "ID do modelo (opcional)"
+
+msgid "Wait for reply"
+msgstr "Aguardar resposta"
+
+msgid "Prepare polite follow-up"
+msgstr "Preparar retorno educado"
+
+msgid "Cancel reminder"
+msgstr "Cancelar lembrete"
+
+msgid "Prepare creates a proposal for the app approval panel, never an automatic send. Original To/Cc recipients are retained; Bcc is not reused. Custom templates with missing variables must be filled in Compose."
+msgstr "Preparar cria uma proposta para o painel de aprovação, nunca um envio automático. Destinatários Para/Cc são mantidos; Cco não é reutilizado. Preencha variáveis ausentes de modelos personalizados em Escrever."
+
+msgid "Email templates"
+msgstr "Modelos de resposta"
+
+msgid "Templates"
+msgstr "Modelos"
+
+msgid "New email template"
+msgstr "Novo modelo de resposta"
+
+msgid "Edit email template"
+msgstr "Editar modelo de resposta"
+
+msgid "New template"
+msgstr "Novo modelo"
+
+msgid "No email templates yet"
+msgstr "Nenhum modelo de resposta"
+
+msgid "Insert template {}"
+msgstr "Inserir modelo {}"
+
+msgid "Insert"
+msgstr "Inserir"
+
+msgid "Edit template"
+msgstr "Editar modelo"
+
+msgid "Delete template"
+msgstr "Excluir modelo"
+
+msgid "Template name"
+msgstr "Nome do modelo"
+
+msgid "Shortcut (optional)"
+msgstr "Atalho (opcional)"
+
+msgid "Subject (optional)"
+msgstr "Assunto (opcional)"
+
+msgid "Template message"
+msgstr "Mensagem do modelo"
+
+msgid "Save template"
+msgstr "Salvar modelo"
+
+msgid "Delete email template?"
+msgstr "Excluir modelo de resposta?"
+
+msgid "Delete this template from this device?"
+msgstr "Excluir este modelo deste dispositivo?"
+
+msgid "Email template inserted."
+msgstr "Modelo de resposta inserido."
+
+msgid "Delete"
+msgstr "Excluir"
+
+msgid "No subject"
+msgstr "Sem assunto"
+
+msgid "Edit"
+msgstr "Editar"

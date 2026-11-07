@@ -707,3 +707,154 @@ mensagens posteriores aparecem ao atualizar manualmente.
 Optional AI enhancement has a 30-second total budget per digest; unfinished items retain
 local categories. / A IA opcional tem limite total de 30 segundos por resumo; itens não
 concluídos mantêm a categoria local.
+
+## Modelos de resposta e lembretes de retorno (pt-BR)
+
+### Modelos editáveis
+
+- Em **Escrever → Modelos**, crie, edite, insira e exclua modelos locais. Cinco exemplos
+  claramente editáveis são criados uma única vez: orçamento, segunda via de boleto,
+  confirmação de pagamento, agradecimento e retorno educado. Editar/excluir um exemplo
+  é respeitado; ele não reaparece na próxima abertura.
+- Use `{{nome}}`, `{{valor}}`, `{{data}}`, `{{vencimento}}`, `{{empresa}}`,
+  `{{assinatura}}` ou nomes personalizados (letras Unicode, números, `_`, `-`, `.`).
+  No campo de variáveis, informe **uma linha `nome=valor` por variável**. O primeiro
+  `=` separa nome/valor; valores podem conter `=`. Esse editor é de uma linha por valor;
+  o MCP também aceita valores multilinha.
+- A assinatura padrão da conta preenche `assinatura`: padrão de nova mensagem para
+  envio e padrão de resposta para respostas. Configure os padrões existentes de
+  assinatura nas preferências da conta. Não são criadas identidades fictícias.
+  Uma variável explícita pode substituir a assinatura. A inserção evita duplicar o
+  bloco de assinatura gerenciado pelo editor; assinaturas editadas manualmente são
+  preservadas como texto e devem ser revisadas.
+- Nomes ausentes aparecem em vermelho na janela de modelos; a inserção permanece
+  aberta até preencher os valores. Rascunhos incompletos podem ser salvos, mas a
+  interface e a fila central de envio recusam variáveis não preenchidas, inclusive
+  em assunto/HTML. Isso é conservador: `{{nome}}` literal em uma citação também
+  precisa ser removido/substituído antes do envio.
+- Valores são texto, não código/HTML nem expressões; não há expansão recursiva.
+  A composição rica escapa o texto. Limites: nome 200 bytes, assunto armazenado
+  4 KiB, corpo armazenado 64 KiB, 100 variáveis, 16 KiB por valor e 128 KiB de
+  saída renderizada. `list_templates` retorna até 200 metadados, sem os corpos.
+
+### MCP
+
+Todas as operações usam a política central e o histórico sem corpos/credenciais:
+
+```json
+{"name":"list_templates","arguments":{}}
+{"name":"render_template","arguments":{"template_id":1,"accountId":1,"reply":false,"variables":{"nome":"Cliente de teste","valor":"R$ 100,00","data":"10/11/2026","assinatura":"Equipe de teste"}}}
+{"name":"send_message","arguments":{"accountId":1,"to":["cliente@example.invalid"],"template_id":1,"variables":{"nome":"Cliente de teste","valor":"R$ 100,00","data":"10/11/2026","assinatura":"Equipe de teste"}}}
+{"name":"reply_message","arguments":{"messageId":123,"template_id":5,"variables":{"nome":"Cliente de teste","assinatura":"Equipe de teste"},"quoteOriginal":false}}
+{"name":"set_followup","arguments":{"messageId":123,"days":3,"template_id":5}}
+{"name":"list_followups","arguments":{"accountId":1}}
+{"name":"cancel_followup","arguments":{"messageId":123}}
+```
+
+`render_template` devolve `subject`, `body` (texto) e `missing`; não cria/envia mensagem.
+Sem `template_id`, `send_message` continua exigindo assunto/corpo e `reply_message`
+exige corpo. Com modelo, assunto/corpo avulsos não substituem o modelo. Respostas
+preservam o assunto da conversa. Os valores são resolvidos antes de salvar a proposta:
+edições posteriores do modelo não mudam o rascunho aguardando aprovação. Usar modelo
+em envio também aplica a faceta **Ler**; bloqueá-la bloqueia o uso do modelo.
+`list_templates` usa **Listar**, `render_template`/`list_followups` usam **Ler**;
+`set_followup`/`cancel_followup` usam **Gerenciar lembretes de resposta** (Perguntar
+por padrão), com escopo real da conta da mensagem. O resultado identifica as regras.
+
+### Aguardar resposta, sem envio automático
+
+1. Abra uma mensagem realmente **enviada**. Vá a **Configurações → Geral → Lembretes
+   de resposta**, clique **Usar mensagem selecionada** (ou informe o ID), escolha
+   1–365 dias e opcionalmente um modelo. Clique **Aguardar resposta** e aprove a
+   alteração no painel normal quando a política pedir.
+2. O prazo conta períodos de 24 horas a partir da marcação. A cada 30 segundos,
+   com o aplicativo aberto, uma resposta recebida mais recente na mesma conversa
+   encerra o lembrete. Mensagens enviadas pelo próprio usuário não contam como resposta.
+   Mudanças no identificador da conversa são acompanhadas. Estado/prazo e deduplicação
+   ficam no SQLite do perfil; após reiniciar, pendências vencidas são recuperadas.
+3. Ao vencer sem resposta, há aviso no aplicativo e notificação do sistema sem
+   conteúdo do e-mail. A entrega ao sistema é no máximo uma tentativa por lembrete;
+   se o sistema recusar, a lista local continua disponível. Não existe serviço de
+   fundo quando o aplicativo está fechado, nem detecção de respostas ainda não sincronizadas.
+4. **Preparar retorno educado** é um clique explícito que cria uma proposta baseada
+   no modelo (sem chamada de IA), preserva Para/Cc, exclui os próprios endereços e não
+   reutiliza Cco. **Nunca envia por conta própria**, mesmo com regra Responder=Permitir.
+   A proposta sempre exige aprovação no aplicativo. Uma nova resposta ou cancelamento
+   antes da aprovação invalida a proposta. Variáveis adicionais de um modelo personalizado
+   devem ser preenchidas em Escrever/Modelos; não são inventadas pela IA.
+5. Revise assunto, destinatários e corpo no painel e aprove/cancele normalmente.
+   Não há nova tentativa automática após falha ambígua. Propostas em memória expiram
+   com o processo/prazo normal; o rascunho continua no perfil. Para propor novamente
+   após cancelar/expirar/reiniciar, marque explicitamente outro prazo no lembrete
+   (evita propostas duplicadas). A lista exibe até 200 lembretes ordenados por prazo.
+
+**Windows:** na branch `feat/ai-mcp`, execute `cargo build -p flectar-mail -p mail-mcp`;
+abra `target\debug\flectar-mail.exe` e conecte seu cliente ao
+`target\debug\mail-mcp.exe` no mesmo perfil. O bridge, a aprovação local, chaves OAuth
+armazenadas e opções de anexos permanecem iguais às seções anteriores. Esta fase foi
+validada em Linux com perfil sintético, sem contas/e-mails/uploads reais; a notificação
+Windows depende das permissões locais. Captura real da UI com dados sintéticos:
+[`images/followups-pt-BR.png`](images/followups-pt-BR.png).
+
+O resumo diário continua por datas locais; a janela móvel opcional de últimas 24 h
+não foi incluída nesta fase. IA para elaborar retornos também não é necessária nem
+utilizada: os modelos locais funcionam sem chave.
+
+## Reply templates and follow-up reminders (English)
+
+**Compose → Templates** reuses the existing local create/edit/delete interface. Five
+clearly editable Portuguese examples are seeded once (quote, duplicate boleto,
+payment confirmation, thank-you, polite follow-up). Deleted/edited seeds stay that way.
+Use `{{nome}}`, `{{valor}}`, `{{data}}`, `{{vencimento}}`, `{{empresa}}`,
+`{{assinatura}}` or custom Unicode/alphanumeric/underscore/hyphen/dot keys. Enter one
+`key=value` per line; values may contain `=`. MCP string values may be multiline.
+Existing per-account new/reply signature defaults fill `assinatura` unless explicitly
+overridden; no fictional business identities are created. Managed compose signatures
+are not inserted twice; manually edited signatures are retained for review.
+
+Missing names are shown in red and prevent insertion/sending. Incomplete drafts may
+be saved, but the central send queue also rejects unresolved variables in subject,
+text or HTML. This conservative check includes literal mustache placeholders in quoted
+mail. Variables are plain data, never executable expressions, HTML or recursive macros;
+rich compose escapes inserted text. Stored limits: 200-byte name, 4-KiB subject,
+64-KiB body; render limits: 100 variables, 16 KiB each, 128-KiB output.
+
+MCP examples above are illustrative only (`example.invalid`):
+- `list_templates`: up to 200 metadata records, **List** policy; bodies are not returned.
+- `render_template`: `subject`, plain `body`, `missing`; **Read** policy; no mail sent.
+- `send_message`/`reply_message` accept `template_id` and string-map `variables`.
+  Without a template, the original required subject/body rules apply. Template content
+  takes precedence over separate subject/body fields; replies retain the thread subject.
+  Rendering happens before staging, and later template edits do not alter that draft.
+  Template-based sends also evaluate the **Read** facet.
+- `list_followups`: **Read**; `set_followup(messageId, days=3, template_id?)` and
+  `cancel_followup(messageId)`: **Manage follow-up reminders**, **Ask** by default.
+  All use the central evaluator/account scope and body/credential-free history; tool
+  responses identify applicable rules. Standard app-only review defaults still apply.
+
+Open **Settings → General → Follow-up reminders**, use the selected truly sent
+message (or its ID), set 1–365 elapsed 24-hour days, optionally select a template ID,
+and approve the tracking change if requested. Drafts/unsent outbox messages are rejected.
+An incoming later message in the current thread completes the reminder; outgoing mail
+does not. Tracking survives rethreading and is stored in the profile SQLite database.
+The open app checks every 30 seconds and catches up overdue reminders after restart.
+It shows an in-app notice and a generic OS notification without email content, with
+at-most-once OS delivery attempts. There is no closed-app background service; replies
+must have synced locally. Up to 200 reminders are shown, oldest due first.
+
+**Prepare polite follow-up** is an explicit user click, not a scheduler action. It
+uses a deterministic local template, retains original To/Cc minus own addresses, omits
+Bcc, and creates an immutable proposal for app approval. It never sends automatically,
+even under Reply=Allow; app-only approval is mandatory. A new reply or cancelled
+reminder invalidates a staged proposal. Fill additional custom variables manually in
+Compose/Templates. No AI key is needed or queried. Cancel/expiry/restart does not
+automatically retry or duplicate proposals: explicitly set the reminder again to
+propose another draft; drafts survive while in-memory approvals do not.
+
+Windows try-it: `cargo build -p flectar-mail -p mail-mcp`, then open
+`target\debug\flectar-mail.exe` and connect `target\debug\mail-mcp.exe` to the same
+profile using the existing bridge instructions. This phase is Linux-debug validated
+with synthetic profiles only, no real account/email/upload; native Windows notification
+permissions remain platform-dependent. [Synthetic Slint capture](images/followups-pt-BR.png).
+The optional rolling-last-24-hours digest window was deferred; existing local-date
+ranges are unchanged.

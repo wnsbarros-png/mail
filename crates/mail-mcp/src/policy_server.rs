@@ -87,11 +87,18 @@ impl Server {
             .await?;
         let own = self
             .core
-            .list_accounts()
-            .await?
-            .into_iter()
-            .map(|a| a.email.to_ascii_lowercase())
-            .collect::<Vec<_>>();
+            .db
+            .read(|c| {
+                let mut q = c.prepare(
+                    "SELECT email FROM accounts UNION SELECT email FROM sender_identities",
+                )?;
+                Ok(q.query_map([], |r| r.get::<_, String>(0))?
+                    .collect::<std::result::Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .map(|a| a.to_ascii_lowercase())
+                    .collect::<Vec<_>>())
+            })
+            .await?;
         let draft = SaveDraftArgs {
             draft_id: None,
             account_id: original.account_id,
@@ -229,6 +236,24 @@ impl Server {
         .await
     }
     async fn tool_context(&self, name: &str, args: &Value) -> Result<Context> {
+        if matches!(name, "set_followup" | "cancel_followup") {
+            req_i64(args, "messageId")?;
+        }
+        if name == "set_followup" {
+            if let Some(value) = args.get("days") {
+                let days = value
+                    .as_i64()
+                    .ok_or_else(|| anyhow!("days must be an integer"))?;
+                if !(1..=365).contains(&days) {
+                    bail!("days must be 1–365");
+                }
+            }
+            if let Some(value) = args.get("template_id").filter(|v| !v.is_null())
+                && value.as_i64().is_none()
+            {
+                bail!("template_id must be an integer");
+            }
+        }
         if name == "set_category" {
             req_i64(args, "messageId")?;
             let _: flectar_mail_core::triage::Category = serde_json::from_value(
@@ -481,7 +506,7 @@ impl Server {
         } else {
             self.dispatch(name, args, &decision, &ctx).await
         };
-        let result=result.map(|mut v|{if matches!(action,Action::Send|Action::Reply) && decision.applied.iter().any(|r|r.action==Action::Read && r.effect==Effect::Ask) && v["status"]=="pending_confirmation" {v["summary"]=json!({"action":"send_or_reply","policy":decision,"note":"Review the original message and proposed reply in the desktop app."});}v});
+        let result=result.map(|mut v|{if matches!(action,Action::Send|Action::Reply) && decision.applied.iter().any(|r|r.action==Action::Read && r.effect==Effect::Ask) && v["status"]=="pending_confirmation" {v["summary"]=json!({"action":"send_or_reply","policy":decision,"note":"Review the proposed message in the desktop app."});}v});
         self.finish_record(actor, action, &ctx, &decision, result)
             .await
     }
@@ -540,7 +565,21 @@ impl Server {
         let action = p.policy.applied[0].action;
         let mut ctx = match &p.kind {
             PendingKind::Send { draft_id, .. } => {
-                if p.context.followup {let draft=self.core.get_draft(*draft_id).await?;let original=draft.in_reply_to_message_id.ok_or_else(||anyhow!("Missing follow-up source"))?;let active=self.core.list_followups(Some(draft.account_id)).await?.into_iter().any(|f|f.message_id==original&&f.state=="drafted");if !active {bail!("Follow-up was cancelled or a reply arrived; proposal not sent");}}
+                if p.context.followup {
+                    let draft = self.core.get_draft(*draft_id).await?;
+                    let original = draft
+                        .in_reply_to_message_id
+                        .ok_or_else(|| anyhow!("Missing follow-up source"))?;
+                    let active = self
+                        .core
+                        .list_followups(Some(draft.account_id))
+                        .await?
+                        .into_iter()
+                        .any(|f| f.message_id == original && f.state == "drafted");
+                    if !active {
+                        bail!("Follow-up was cancelled or a reply arrived; proposal not sent");
+                    }
+                }
                 self.draft_context(&self.core.get_draft(*draft_id).await?, false)
                     .await?
             }
@@ -566,6 +605,24 @@ impl Server {
         Ok((ctx, decision))
     }
     pub(super) async fn confirm(&self, id: &str, in_app: bool) -> Result<Value> {
+        if !in_app {
+            let pending = self.pending.lock().await.get(id).cloned();
+            if let Some(p) = pending {
+                let (ctx, d) = self.pending_decision(&p).await?;
+                if d.in_app_only {
+                    self.record(
+                        "mcp_confirmation",
+                        p.policy.applied[0].action,
+                        &ctx,
+                        &d,
+                        "app_approval_required",
+                        Some(id),
+                    )
+                    .await?;
+                    bail!("Cloud upload / follow-up approval must happen in the desktop app");
+                }
+            }
+        }
         let p = self.take_pending(id).await?;
         let action = p.policy.applied[0].action;
         let (ctx, d) = match self.pending_decision(&p).await {
@@ -598,7 +655,7 @@ impl Server {
             return Err(policy::Denied(d).into());
         }
         if d.in_app_only && !in_app {
-            bail!("Cloud upload approval must happen in the desktop app");
+            bail!("Cloud upload / follow-up approval must happen in the desktop app");
         }
         self.record(actor, action, &ctx, &d, "approved", Some(id))
             .await?;

@@ -74,7 +74,7 @@ pub fn render(subject: &str, body: &str, vars: &Variables) -> Result<Rendered> {
     if subject.contains(['\r', '\n']) {
         return Err(error("Template subject cannot contain line breaks"));
     }
-    if subject.len() > 16 * 1024 || body.len() > 128 * 1024 {
+    if subject.len() > 16 * 1024 || subject.len() + body.len() > 128 * 1024 {
         return Err(error("Rendered template too large"));
     }
     Ok(Rendered {

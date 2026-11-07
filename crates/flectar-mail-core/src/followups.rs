@@ -59,7 +59,11 @@ impl Core {
         let list = self.list_followups(None).await?;
         let f = list
             .into_iter()
-            .find(|f| f.message_id == message && matches!(f.state.as_str(), "waiting" | "notified"))
+            .find(|f| {
+                f.message_id == message
+                    && f.due_ms <= chrono::Utc::now().timestamp_millis()
+                    && matches!(f.state.as_str(), "waiting" | "notified")
+            })
             .ok_or_else(|| error("Follow-up inactive or already answered"))?;
         let (name,) = self
             .db
@@ -73,7 +77,7 @@ impl Core {
                     .first()
                     .and_then(|a| a.name.clone())
                     .filter(|s| !s.trim().is_empty())
-                    .unwrap_or_else(|| "tudo bem".into()),))
+                    .unwrap_or_else(|| "pessoal".into()),))
             })
             .await?;
         let signature = self

@@ -6153,7 +6153,7 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
                 .block_on(source.file_core().render_email_template(
                     template.id,
                     Some(i64::from(account)),
-                    false,
+                    intent_for_template_use.borrow().mode != "new",
                     values,
                 ))
                 .map_err(|e| e.to_string())
@@ -6176,6 +6176,10 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
         }
         if app.get_compose_subject().trim().is_empty() && !rendered.subject.trim().is_empty() {
             app.set_compose_subject(rendered.subject.into());
+        }
+        if flectar_mail_core::templates::unfilled("", &template.body_text).contains("assinatura") {
+            app.global::<AccountMailPreferences>()
+                .invoke_composer_signature(0);
         }
         {
             let mut document = document_for_template_use.borrow_mut();

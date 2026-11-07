@@ -2,7 +2,7 @@ import { ListView, VerticalBox } from "std-widgets.slint";
 import { EmailTemplateRow } from "../models.slint";
 import { Button } from "button.slint";
 import { ConfirmationDialog } from "confirmation-dialog.slint";
-import { IconButton, LineEdit, TextEdit } from "controls.slint";
+import { LineEdit, TextEdit } from "controls.slint";
 import { TypeScale } from "../typography.slint";
 
 export component EmailTemplates inherits Rectangle {
@@ -121,7 +121,7 @@ export component EmailTemplates inherits Rectangle {
 
                 Text {
                     x: 20px;
-                    width: parent.width - 76px;
+                    width: parent.width - 116px;
                     height: parent.height;
                     text: root.editing
                         ? (root.edit-id < 0 ? @tr("New email template") : @tr("Edit email template"))
@@ -133,15 +133,12 @@ export component EmailTemplates inherits Rectangle {
                     overflow: elide;
                 }
 
-                IconButton {
-                    x: parent.width - 48px;
+                Button {
+                    x: parent.width - 88px;
                     y: 8px;
-                    width: 40px;
+                    width: 76px;
                     height: 40px;
-                    icon: @image-url("../icons/lucide/outline/x.svg");
-                    icon-color: root.muted-color;
-                    hover-background: root.hover-color;
-                    tooltip-text: @tr("Close");
+                    text: @tr("Close");
                     clicked => { root.close-dialog(); }
                 }
             }
@@ -158,8 +155,6 @@ export component EmailTemplates inherits Rectangle {
                     width: 144px;
                     height: 34px;
                     text: @tr("New template");
-                    icon: @image-url("../icons/lucide/outline/plus.svg");
-                    has-icon: true;
                     primary: true;
                     clicked => { root.new-template(); }
                 }
@@ -207,7 +202,7 @@ export component EmailTemplates inherits Rectangle {
                         template-name := Text {
                             x: 10px;
                             y: 9px;
-                            width: max(0px, parent.width - 162px);
+                            width: max(0px, parent.width - 266px);
                             height: max(22px, self.preferred-height);
                             text: template.name;
                             color: root.title-color;
@@ -219,7 +214,7 @@ export component EmailTemplates inherits Rectangle {
                         template-detail := Text {
                             x: 10px;
                             y: template-name.y + template-name.height + 1px;
-                            width: max(0px, parent.width - 162px);
+                            width: max(0px, parent.width - 266px);
                             height: max(20px, self.preferred-height);
                             text: template.shortcut == ""
                                 ? (template.subject == "" ? @tr("No subject") : template.subject)
@@ -231,7 +226,7 @@ export component EmailTemplates inherits Rectangle {
 
                         template-hit := TouchArea {
                             x: 0px;
-                            width: max(0px, parent.width - 144px);
+                            width: max(0px, parent.width - 250px);
                             height: parent.height;
                             accessible-role: button;
                             accessible-label: @tr("Insert template {}", template.name);
@@ -245,7 +240,7 @@ export component EmailTemplates inherits Rectangle {
                         }
 
                         Button {
-                            x: parent.width - 136px;
+                            x: parent.width - 242px;
                             y: 15px;
                             width: 68px;
                             height: 34px;
@@ -255,23 +250,21 @@ export component EmailTemplates inherits Rectangle {
                             }
                         }
 
-                        IconButton {
-                            x: parent.width - 66px;
-                            y: 16px;
-                            icon: @image-url("../icons/lucide/outline/compose.svg");
-                            icon-color: root.muted-color;
-                            hover-background: root.hover-color;
-                            tooltip-text: @tr("Edit template");
+                        Button {
+                            x: parent.width - 164px;
+                            y: 15px;
+                            width: 74px;
+                            height: 34px;
+                            text: @tr("Edit");
                             clicked => { root.edit-template(index); }
                         }
 
-                        IconButton {
-                            x: parent.width - 32px;
-                            y: 16px;
-                            icon: @image-url("../icons/lucide/outline/trash.svg");
-                            icon-color: root.muted-color;
-                            hover-background: root.hover-color;
-                            tooltip-text: @tr("Delete template");
+                        Button {
+                            x: parent.width - 86px;
+                            y: 15px;
+                            width: 78px;
+                            height: 34px;
+                            text: @tr("Delete");
                             clicked => {
                                 root.delete-id = template.id;
                                 root.delete-name = template.name;

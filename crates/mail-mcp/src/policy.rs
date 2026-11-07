@@ -1029,4 +1029,32 @@ mod tests {
             assert!(conditions.matches(&context, Effect::Ask));
         }
     }
+    #[test]
+    fn templates_and_followups_cannot_bypass_read_or_native_approval() {
+        let mut config = Config::default();
+        config.defaults.insert(Action::Send, Effect::Allow);
+        config.defaults.insert(Action::Reply, Effect::Allow);
+        config.defaults.insert(Action::Read, Effect::Block);
+        let mut context = Context {
+            uses_template: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            config.evaluate(Action::Send, &context, false).effect,
+            Effect::Block
+        );
+        config.defaults.insert(Action::Read, Effect::Allow);
+        context.followup = true;
+        for action in [Action::Send, Action::Reply] {
+            let d = config.evaluate(action, &context, false);
+            assert_eq!(d.effect, Effect::Ask);
+            assert!(d.in_app_only);
+        }
+        config.defaults.insert(Action::Reply, Effect::Block);
+        assert_eq!(
+            config.evaluate(Action::Reply, &context, false).effect,
+            Effect::Block
+        );
+        assert_eq!(Action::Followup.default_effect(), Effect::Ask);
+    }
 }

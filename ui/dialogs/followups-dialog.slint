@@ -1,7 +1,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { Button } from "../components/button.slint";
 import { LineEdit } from "../components/controls.slint";
-export struct FollowupRow {id:int,subject:string,due:string,state:string,active:bool}
+export struct FollowupRow {id:int,subject:string,due:string,state:string,active:bool,can-propose:bool}
 export component FollowupsDialog inherits Rectangle {
  in-out property <string> message;
  in-out property <string> days:"3";
@@ -26,7 +26,7 @@ export component FollowupsDialog inherits Rectangle {
      VerticalLayout {padding:10px;spacing:5px;
       Text {text:row.subject;overflow:elide;color:#172033;font-weight:600;}
       Text {text:row.state+" · "+row.due;overflow:elide;color:#475569;}
-      HorizontalLayout {spacing:8px;Button {text:@tr("Prepare polite follow-up");enabled:!root.busy&&row.active;clicked=>{root.command("propose",row.id);}}Button {text:@tr("Cancel reminder");enabled:!root.busy&&row.active;clicked=>{root.command("cancel",row.id);}}}
+      HorizontalLayout {spacing:8px;Button {text:@tr("Prepare polite follow-up");enabled:!root.busy&&row.can-propose;clicked=>{root.command("propose",row.id);}}Button {text:@tr("Cancel reminder");enabled:!root.busy&&row.active;clicked=>{root.command("cancel",row.id);}}}
      }
     }
    }

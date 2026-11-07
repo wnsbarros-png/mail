@@ -1427,6 +1427,7 @@ export component AppWindow inherits Window {
 
     changed compose_open => {
         if (!root.compose_open) {
+            root.compose-template-values = "";
             root.compose-back-request = 0;
             root.compose_editor_scroll_y = 0px;
             root.compose_editor_preedit_text = "";

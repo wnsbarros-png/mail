@@ -396,6 +396,14 @@ impl Server {
                 "Open the desktop app before proposing cloud attachments; upload approval must happen in the app"
             );
         }
+        flectar_mail_core::templates::ensure_filled(
+            &draft.subject,
+            &format!(
+                "{}\n{}",
+                draft.body_text,
+                draft.body_html.as_deref().unwrap_or_default()
+            ),
+        )?;
         cloud_links::validate_expiry(&options)?;
         if draft.to.is_empty() && draft.cc.is_empty() && draft.bcc.is_empty() {
             bail!("the message has no recipients");

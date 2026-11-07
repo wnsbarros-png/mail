@@ -7180,3 +7180,51 @@ msgstr ""
 #: ui/app.slint ui/dialogs/settings-dialog.slint
 msgid "Portuguese (Brazil)"
 msgstr ""
+
+msgid "Follow-up reminders"
+msgstr ""
+
+msgid "Manage follow-up reminders"
+msgstr ""
+
+msgid "Fill template variables: {}"
+msgstr ""
+
+msgid "Follow-up reminders are due. Open Settings, Follow-up reminders."
+msgstr ""
+
+msgid "Variables: one name=value per line. Missing names appear in red. Account signature fills assinatura."
+msgstr ""
+
+msgid "Select an actually sent message, then wait for a reply. Reminders never send mail automatically. The app must be open; overdue reminders appear after restart."
+msgstr ""
+
+msgid "Templates: create, edit or delete in Compose, Templates. Variables use {{nome}}, {{valor}}, {{data}}, {{vencimento}}, {{empresa}}, {{assinatura}} or custom names. Configure signatures per account in Settings."
+msgstr ""
+
+msgid "Sent message ID"
+msgstr ""
+
+msgid "Use selected message"
+msgstr ""
+
+msgid "Days (1–365)"
+msgstr ""
+
+msgid "Optional template ID"
+msgstr ""
+
+msgid "Wait for reply"
+msgstr ""
+
+msgid "Prepare polite follow-up"
+msgstr ""
+
+msgid "Cancel reminder"
+msgstr ""
+
+msgid "Prepare creates a proposal for the app approval panel, never an automatic send. Original To/Cc recipients are retained; Bcc is not reused. Custom templates with missing variables must be filled in Compose."
+msgstr ""
+
+msgid "Templates"
+msgstr ""

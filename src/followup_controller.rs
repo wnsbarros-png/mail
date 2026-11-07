@@ -1,4 +1,5 @@
 //! Local reminder timer: no send calls; proposals require an explicit UI click.
+use crate::ui_message::AppWindowMessages;
 use crate::{AppWindow, FollowupRow, InboxState};
 use flectar_mail_core::followups::Followup;
 use serde_json::{Value, json};
@@ -60,6 +61,7 @@ async fn rows(
             "Feche os lembretes e aprove a leitura no painel. / Close reminders and approve the read in the panel."
         );
     }
+    let value = value.get("result").cloned().unwrap_or(value);
     Ok(serde_json::from_value(value)?)
 }
 fn present(app: &AppWindow, rows: Vec<Followup>) {
@@ -85,7 +87,8 @@ fn present(app: &AppWindow, rows: Vec<Followup>) {
                     _ => "Aguardando resposta / Waiting for reply",
                 }
                 .into(),
-                active: matches!(f.state.as_str(), "waiting" | "notified"),
+                active: matches!(f.state.as_str(), "waiting" | "notified" | "drafted"),
+                can_propose: f.due_ms <= now && matches!(f.state.as_str(), "waiting" | "notified"),
             })
             .collect::<Vec<_>>(),
     )));
@@ -117,4 +120,37 @@ pub(crate) fn register(
     let timer = slint::Timer::default();
     timer.start(slint::TimerMode::Repeated,Duration::from_secs(30),move||{let Some(state)=state_weak.upgrade()else{return;};let Some(source)=state.borrow().core.clone()else{return;};if flight.swap(true,Ordering::AcqRel){return;}let weak=weak.clone();let flight=flight.clone();handle.spawn(async move{let result=source.file_core().claim_followup_notices().await;flight.store(false,Ordering::Release);let _lease=source;if let Ok(count)=result&&count>0{let _=weak.upgrade_in_event_loop(move|app|{app.set_followup_status("Há respostas pendentes. / Replies are overdue.".into());app.set_sync_status(crate::ui_message::UiMessage::plain("Follow-up reminders are due. Open Settings, Follow-up reminders."));if notify_rust::Notification::new().summary("Lembretes de resposta / Follow-up reminders").body("Há respostas pendentes. Confira os lembretes no aplicativo. / Replies are overdue. Review reminders in the app.").show().is_err(){tracing::debug!("Follow-up OS notification unavailable");}});}});});
     timer
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn native_read_ask_reuses_one_ticket_and_never_sends() {
+        use mail_mcp::policy::{Action, Effect};
+        let dir = tempfile::tempdir().unwrap();
+        let source = crate::mail::CoreMailSource::start(
+            flectar_mail_core::config::Paths::for_tests(dir.path()),
+            Arc::new(flectar_mail_core::accounts::credentials::UnavailableCredentialStore),
+            Arc::new(flectar_mail_core::oauth::redirect::LoopbackRedirectBroker::default()),
+        )
+        .await
+        .unwrap();
+        let server = source.ai_server();
+        let mut config = server.policy_config().await.0;
+        config.defaults.insert(Action::Read, Effect::Ask);
+        server.save_policy(config).await.unwrap();
+        let ticket: Ticket = Arc::new(Mutex::new(None));
+        assert!(rows(&source, &ticket).await.is_err());
+        assert!(rows(&source, &ticket).await.is_err());
+        let pending = server.pending_actions().await;
+        assert_eq!(pending.len(), 1);
+        server
+            .approve_in_app(pending[0]["pendingId"].as_str().unwrap())
+            .await
+            .unwrap();
+        assert!(rows(&source, &ticket).await.unwrap().is_empty());
+        assert!(ticket.lock().unwrap().is_none());
+        assert!(server.pending_actions().await.is_empty());
+    }
 }
