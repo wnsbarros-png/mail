@@ -53,7 +53,9 @@ async fn rows(
             .call_tool_from_app("list_followups", &json!({}))
             .await?
     };
-    if let Some(id) = value["pendingId"].as_str() {
+    if value["status"] == "pending_confirmation"
+        && let Some(id) = value["pendingId"].as_str()
+    {
         *ticket
             .lock()
             .map_err(|_| anyhow::anyhow!("Reminder state unavailable"))? = Some(id.into());
