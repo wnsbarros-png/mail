@@ -260,7 +260,9 @@ async fn download_tool_checks_ownership_filename_and_no_overwrite() {
         conn.execute("INSERT INTO attachments (message_id, filename, mime_type, size, file_path) VALUES (?1, 'document.txt', 'text/plain', 16, ?2)", (message_id, source_string))?;
         Ok(conn.last_insert_rowid())
     }).await.unwrap();
-    let args = json!({"messageId":message_id,"attachmentId":attachment_id,"folder":dir.path()});
+    let downloads = tempfile::tempdir().unwrap();
+    let args =
+        json!({"messageId":message_id,"attachmentId":attachment_id,"folder":downloads.path()});
     let saved = server
         .call_tool("download_attachment", &args)
         .await
@@ -1121,4 +1123,55 @@ async fn block_added_during_upload_prevents_queueing_and_cleans_created_objects(
             .iter()
             .any(|e| e.result == "blocked_during_upload")
     );
+}
+
+#[tokio::test]
+async fn download_cannot_seed_policy_files_even_when_rule_allows_downloads() {
+    let (server, _core, dir) = fixture(AiConfig::default()).await;
+    let mut config = Policy::default();
+    config
+        .defaults
+        .insert(PolicyAction::Download, Effect::Allow);
+    server.save_policy(config).await.unwrap();
+    let args =
+        json!({"messageId":123,"attachmentId":1,"folder":dir.path(),"filename":"ai-policy.json"});
+    assert!(
+        server
+            .call_tool("download_attachment", &args)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("app data profile")
+    );
+    // A fresh profile has no policy file; approving a normal download still
+    // must not let an email attachment initialize one with attacker rules.
+    let (fresh, _, fresh_dir) = fixture(AiConfig::default()).await;
+    let policy_path = fresh_dir.path().join("ai-policy.json");
+    assert!(!policy_path.exists());
+    let staged=fresh.call_tool("download_attachment",&json!({"messageId":123,"attachmentId":1,"folder":fresh_dir.path(),"filename":"ai-policy.json"})).await.unwrap();
+    assert!(
+        fresh
+            .approve_in_app(staged["pendingId"].as_str().unwrap())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("app data profile")
+    );
+    assert!(!policy_path.exists());
+    #[cfg(unix)]
+    {
+        let outside = tempfile::tempdir().unwrap();
+        let alias = outside.path().join("profile-alias");
+        std::os::unix::fs::symlink(dir.path(), &alias).unwrap();
+        let mut args = args.clone();
+        args["folder"] = json!(alias);
+        assert!(
+            server
+                .call_tool("download_attachment", &args)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("app data profile")
+        );
+    }
 }

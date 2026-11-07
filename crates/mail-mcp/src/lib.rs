@@ -714,6 +714,15 @@ impl Server {
     }
 
     async fn download_attachment(&self, args: &Value) -> Result<Value> {
+        // A downloadable JSON attachment must not seed policy/bridge/profile files,
+        // even when the user has allowed downloads without asking.
+        let folder = tokio::fs::canonicalize(req_str(args, "folder")?).await?;
+        let profile = tokio::fs::canonicalize(self.core.profile_data_dir()).await?;
+        if folder.starts_with(profile) {
+            bail!(
+                "Attachments cannot be saved inside the app data profile; choose a Downloads/Documents folder outside it"
+            );
+        }
         let message = self.body(req_i64(args, "messageId")?).await?;
         let id = req_i64(args, "attachmentId")?;
         let attachment = message
@@ -733,12 +742,7 @@ impl Server {
             .unwrap_or(&fallback);
         attachments::validate_filename(filename)?;
         let source = self.core.get_attachment(id).await?;
-        let path = attachments::save(
-            Path::new(&source),
-            Path::new(req_str(args, "folder")?),
-            filename,
-        )
-        .await?;
+        let path = attachments::save(Path::new(&source), &folder, filename).await?;
         Ok(json!({"path":path,"attachmentId":id}))
     }
 
