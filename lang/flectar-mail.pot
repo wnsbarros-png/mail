@@ -7199,7 +7199,7 @@ msgstr ""
 msgid "Select an actually sent message, then wait for a reply. Reminders never send mail automatically. The app must be open; overdue reminders appear after restart."
 msgstr ""
 
-msgid "Templates: create, edit or delete in Compose, Templates. Variables use {{nome}}, {{valor}}, {{data}}, {{vencimento}}, {{empresa}}, {{assinatura}} or custom names. Configure signatures per account in Settings."
+msgid "Templates: create, edit or delete in Compose, Templates. Variables use {{{{nome}}}}, {{{{valor}}}}, {{{{data}}}}, {{{{vencimento}}}}, {{{{empresa}}}}, {{{{assinatura}}}} or custom names. Configure signatures per account in Settings."
 msgstr ""
 
 msgid "Sent message ID"

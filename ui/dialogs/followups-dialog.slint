@@ -13,9 +13,9 @@ export component FollowupsDialog inherits Rectangle {
  callback close;
  background:#f8fafc;border-radius:12px;
  VerticalLayout {padding:20px;spacing:12px;
-  HorizontalLayout {Text {text:@tr("Follow-up reminders");font-size:24px;color:#172033;vertical-alignment:center;}Button {text:@tr("Close");clicked=>{root.close();}}}
+  HorizontalLayout {Text {text:@tr("Follow-up reminders");font-size:24px;color:#172033;vertical-alignment:center;}Button {width:90px;horizontal-stretch:0;text:@tr("Close");clicked=>{root.close();}}}
   Text {text:@tr("Select an actually sent message, then wait for a reply. Reminders never send mail automatically. The app must be open; overdue reminders appear after restart.");wrap:word-wrap;color:#334155;}
-  Text {text:@tr("Templates: create, edit or delete in Compose, Templates. Variables use {{nome}}, {{valor}}, {{data}}, {{vencimento}}, {{empresa}}, {{assinatura}} or custom names. Configure signatures per account in Settings.");wrap:word-wrap;color:#475569;}
+  Text {text:@tr("Templates: create, edit or delete in Compose, Templates. Variables use {{{{nome}}}}, {{{{valor}}}}, {{{{data}}}}, {{{{vencimento}}}}, {{{{empresa}}}}, {{{{assinatura}}}} or custom names. Configure signatures per account in Settings.");wrap:word-wrap;color:#475569;}
   HorizontalLayout {spacing:8px;Text {text:@tr("Sent message ID");vertical-alignment:center;}LineEdit {text<=>root.message;width:100px;}Button {text:@tr("Use selected message");enabled:!root.busy;clicked=>{root.command("selected",0);}}Text {text:@tr("Days (1–365)");vertical-alignment:center;}LineEdit {text<=>root.days;width:65px;}}
   HorizontalLayout {spacing:8px;Text {text:@tr("Optional template ID");vertical-alignment:center;}LineEdit {text<=>root.template;width:100px;}Button {text:@tr("Wait for reply");enabled:!root.busy;clicked=>{root.command("set",0);}}Button {text:@tr("Refresh");enabled:!root.busy;clicked=>{root.command("refresh",0);}}}
   Text {text:root.status;wrap:word-wrap;color:#475569;}

@@ -311,8 +311,8 @@ msgstr "Variáveis: nome=valor, uma por linha. As ausentes aparecem em vermelho.
 msgid "Select an actually sent message, then wait for a reply. Reminders never send mail automatically. The app must be open; overdue reminders appear after restart."
 msgstr "Selecione uma mensagem realmente enviada e aguarde a resposta. Lembretes nunca enviam e-mails automaticamente. O aplicativo precisa estar aberto; pendências aparecem após reiniciar."
 
-msgid "Templates: create, edit or delete in Compose, Templates. Variables use {{nome}}, {{valor}}, {{data}}, {{vencimento}}, {{empresa}}, {{assinatura}} or custom names. Configure signatures per account in Settings."
-msgstr "Modelos: crie, edite ou exclua em Escrever, Modelos. Use {{nome}}, {{valor}}, {{data}}, {{vencimento}}, {{empresa}}, {{assinatura}} ou nomes personalizados. Configure assinaturas por conta em Configurações."
+msgid "Templates: create, edit or delete in Compose, Templates. Variables use {{{{nome}}}}, {{{{valor}}}}, {{{{data}}}}, {{{{vencimento}}}}, {{{{empresa}}}}, {{{{assinatura}}}} or custom names. Configure signatures per account in Settings."
+msgstr "Modelos: crie, edite ou exclua em Escrever, Modelos. Use {{{{nome}}}}, {{{{valor}}}}, {{{{data}}}}, {{{{vencimento}}}}, {{{{empresa}}}}, {{{{assinatura}}}} ou nomes personalizados. Configure assinaturas por conta em Configurações."
 
 msgid "Sent message ID"
 msgstr "ID da mensagem enviada"

@@ -546,6 +546,8 @@ mod tests {
     use super::*;
     fn ctx() -> Context {
         Context {
+            uses_template: false,
+            followup: false,
             accounts: vec![1],
             recipients: vec!["alice@example.invalid".into()],
             known_count: 1,
