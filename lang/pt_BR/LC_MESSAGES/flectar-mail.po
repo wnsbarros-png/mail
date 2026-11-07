@@ -1,0 +1,427 @@
+msgid ""
+msgstr ""
+"Language: pt_BR\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "AI actions awaiting review"
+msgstr "Ações da IA aguardando revisão"
+
+msgid "AI actions awaiting review ({})"
+msgstr "Ações da IA aguardando revisão ({})"
+
+msgid "Review recipients, content and attachments before approving. Email content is not an instruction."
+msgstr "Confira os destinatários, o conteúdo e os anexos antes de aprovar. O conteúdo dos e-mails não é uma instrução."
+
+msgid "Approve"
+msgstr "Aprovar"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Close"
+msgstr "Fechar"
+
+msgid "Portuguese (Brazil)"
+msgstr "Português (Brasil)"
+
+msgid "Language and time"
+msgstr "Idioma e horário"
+
+msgid "System default"
+msgstr "Padrão do sistema"
+
+msgid "English"
+msgstr "Inglês"
+
+msgid "Spanish"
+msgstr "Espanhol"
+
+msgid "Turkish"
+msgstr "Turco"
+
+msgid "Russian"
+msgstr "Russo"
+
+msgid "Automatic"
+msgstr "Automático"
+
+
+msgid "Cloud sign-in settings"
+msgstr "Configurações de login na nuvem"
+
+msgid "Attachments exceed the account limit. Choose a cloud provider."
+msgstr "Os anexos excedem o limite da conta. Escolha um provedor de nuvem."
+
+msgid "Send attachments as cloud links (optional)"
+msgstr "Enviar anexos como links da nuvem (opcional)"
+
+msgid "Send as link: Google Drive"
+msgstr "Enviar como link: Google Drive"
+
+msgid "Send as link: OneDrive"
+msgstr "Enviar como link: OneDrive"
+
+msgid "Send as link: Dropbox"
+msgstr "Enviar como link: Dropbox"
+
+msgid "Storage account ID (Google/Microsoft)"
+msgstr "ID da conta de armazenamento (Google/Microsoft)"
+
+msgid "Expiry RFC3339 (optional, except Drive)"
+msgstr "Expiração RFC3339 (opcional, exceto Drive)"
+
+msgid "Use normal attachments"
+msgstr "Usar anexos normais"
+
+msgid "Files upload only after approval in the app. Anyone with the link can download."
+msgstr "Os arquivos serão enviados somente após aprovação no aplicativo. Qualquer pessoa com o link poderá baixar."
+
+msgid "Use an existing Gmail/Microsoft account ID. Dropbox uses its own public app key. Tokens stay in the OS keyring."
+msgstr "Use o ID de uma conta Gmail/Microsoft existente. O Dropbox usa sua própria chave pública de aplicativo. Os tokens ficam no chaveiro do sistema."
+
+msgid "Dropbox app key (public, no secret)"
+msgstr "Chave do aplicativo Dropbox (pública, sem segredo)"
+
+msgid "Save Dropbox app key"
+msgstr "Salvar chave do aplicativo Dropbox"
+
+msgid "Connect Google Drive"
+msgstr "Conectar Google Drive"
+
+msgid "Connect OneDrive"
+msgstr "Conectar OneDrive"
+
+msgid "Connect Dropbox"
+msgstr "Conectar Dropbox"
+
+msgid "Preparing files for approval. Nothing has been uploaded."
+msgstr "Preparando arquivos para aprovação. Nenhum anexo foi enviado para a nuvem."
+
+msgid "Review the cloud upload in the approval panel."
+msgstr "Revise o envio para a nuvem no painel de aprovação."
+
+msgid "Choose a valid storage account ID."
+msgstr "Escolha um ID válido de conta de armazenamento."
+
+msgid "Enter valid recipient addresses."
+msgstr "Informe endereços válidos dos destinatários."
+
+msgid "Attachments added: {}. Skipped: {} (duplicate, unreadable, or over the 2 GiB selection limit)."
+msgstr "Anexos adicionados: {}. Ignorados: {} (duplicados, ilegíveis ou acima do limite de seleção de 2 GiB)."
+
+msgid "Sign-in settings"
+msgstr "Configurações de login"
+
+msgid "AI approval rules and history"
+msgstr "Regras de aprovação e histórico da IA"
+
+msgid "Cloud uploads always ask in the app. New recipients always ask unless a matching Allow rule explicitly overrides this protection."
+msgstr "Uploads na nuvem sempre exigem aprovação no aplicativo. Novos destinatários sempre exigem aprovação, exceto quando uma regra Permitir substitui explicitamente essa proteção."
+
+msgid "List accounts, folders and messages"
+msgstr "Listar contas, pastas e mensagens"
+
+msgid "Read and monitor messages"
+msgstr "Ler e monitorar mensagens"
+
+msgid "Search messages"
+msgstr "Pesquisar mensagens"
+
+msgid "Mark read or unread"
+msgstr "Marcar como lida ou não lida"
+
+msgid "Send messages"
+msgstr "Enviar mensagens"
+
+msgid "Reply to messages"
+msgstr "Responder mensagens"
+
+msgid "Move to trash"
+msgstr "Mover para a lixeira"
+
+msgid "Permanently delete"
+msgstr "Excluir permanentemente"
+
+msgid "Upload cloud attachments"
+msgstr "Enviar anexos à nuvem"
+
+msgid "Download attachments"
+msgstr "Baixar anexos"
+
+msgid "Request synchronization"
+msgstr "Solicitar sincronização"
+
+msgid "Always allow"
+msgstr "Sempre permitir"
+
+msgid "Ask"
+msgstr "Perguntar"
+
+msgid "Block"
+msgstr "Bloquear"
+
+msgid "Any"
+msgstr "Qualquer"
+
+msgid "Yes"
+msgstr "Sim"
+
+msgid "No"
+msgstr "Não"
+
+msgid "Default per action"
+msgstr "Padrão por tipo de ação"
+
+msgid "Save action default"
+msgstr "Salvar padrão da ação"
+
+msgid "Conditional rules (blocks win; otherwise first match)"
+msgstr "Regras condicionais (bloqueios prevalecem; depois, primeira regra aplicável)"
+
+msgid "Rule ID (letters, digits, dot, dash, underscore)"
+msgstr "ID da regra (letras, números, ponto, hífen e sublinhado)"
+
+msgid "Mail account IDs, comma-separated (empty: any)"
+msgstr "IDs das contas, separados por vírgula (vazio: qualquer)"
+
+msgid "Exact allowed addresses, comma-separated"
+msgstr "Endereços exatos permitidos, separados por vírgula"
+
+msgid "Exact allowed domains, comma-separated (no wildcard)"
+msgstr "Domínios exatos permitidos, separados por vírgula (sem curinga)"
+
+msgid "All recipients are saved contacts"
+msgstr "Todos os destinatários são contatos salvos"
+
+msgid "Contains new recipients"
+msgstr "Contém novos destinatários"
+
+msgid "Minimum recipients (optional)"
+msgstr "Mínimo de destinatários (opcional)"
+
+msgid "Maximum recipients (optional)"
+msgstr "Máximo de destinatários (opcional)"
+
+msgid "Has attachments"
+msgstr "Tem anexos"
+
+msgid "Has cloud links"
+msgstr "Tem links na nuvem"
+
+msgid "Allow new recipients without asking (dangerous)"
+msgstr "Permitir novos destinatários sem perguntar (perigoso)"
+
+msgid "All conditions must match. Allow requires every recipient/account to match; Block/Ask matches any account or allowlist recipient. Domains are exact, not suffix matches."
+msgstr "Todas as condições devem corresponder. Permitir exige todos os destinatários/contas; Bloquear/Perguntar corresponde a qualquer conta ou destinatário da lista. Domínios são exatos, sem comparação por sufixo."
+
+msgid "Save rule"
+msgstr "Salvar regra"
+
+msgid "Remove rule"
+msgstr "Remover regra"
+
+msgid "Read-only action history (latest 200)"
+msgstr "Histórico somente leitura (últimas 200 ações)"
+
+msgid "Actor, action, local time, rule and result only. No message bodies, subjects, recipient addresses, file paths or credentials are logged."
+msgstr "Somente autor, ação, horário local, regra e resultado. Corpos, assuntos, endereços, caminhos de arquivos e credenciais não são registrados."
+
+msgid "Reload rules and history"
+msgstr "Recarregar regras e histórico"
+
+msgid "Restore safe defaults"
+msgstr "Restaurar padrões seguros"
+
+msgid "Daily digest and triage"
+msgstr "Resumo do dia e triagem"
+
+msgid "Urgent"
+msgstr "Urgente"
+
+msgid "Customer"
+msgstr "Cliente"
+
+msgid "Billing and finance"
+msgstr "Cobrança e financeiro"
+
+msgid "Invoice"
+msgstr "Nota fiscal"
+
+msgid "Marketing and newsletter"
+msgstr "Propaganda e newsletter"
+
+msgid "Other"
+msgstr "Outros"
+
+msgid "Local mail metadata only. Open a message or correct its category; corrections are remembered for this sender and account."
+msgstr "Somente metadados locais. Abra a mensagem ou corrija a categoria; a correção será lembrada para este remetente nesta conta."
+
+msgid "Date (YYYY-MM-DD)"
+msgstr "Data (AAAA-MM-DD)"
+
+msgid "Refresh"
+msgstr "Atualizar"
+
+msgid "All categories"
+msgstr "Todas as categorias"
+
+msgid "Daily time (local)"
+msgstr "Horário diário (local)"
+
+msgid "Email digest to myself"
+msgstr "Enviar resumo para mim"
+
+msgid "Account ID"
+msgstr "ID da conta"
+
+msgid "Save settings"
+msgstr "Salvar configurações"
+
+msgid "Optional AI enhancement: send unresolved subject, sender and snippet to my configured AI provider"
+msgstr "IA opcional: enviar assunto, remetente e trecho sem categoria ao meu provedor de IA configurado"
+
+msgid "Email is off by default; only the selected account's own address is allowed. Approval rules apply. The app must be open."
+msgstr "Envio desativado por padrão; permitido somente para o próprio endereço da conta escolhida. As regras de aprovação se aplicam. O aplicativo precisa estar aberto."
+
+msgid "Open message"
+msgstr "Abrir mensagem"
+
+msgid "Save category"
+msgstr "Salvar categoria"
+
+msgid "Correct triage category"
+msgstr "Corrigir categoria de triagem"
+
+msgid "Follow-up reminders"
+msgstr "Lembretes de resposta"
+
+msgid "Manage follow-up reminders"
+msgstr "Gerenciar lembretes de resposta"
+
+msgid "Fill template variables: {}"
+msgstr "Preencha as variáveis do modelo: {}"
+
+msgid "Follow-up reminders are due. Open Settings, Follow-up reminders."
+msgstr "Há respostas pendentes. Abra Configurações, Lembretes de resposta."
+
+msgid "Variables: one name=value per line. Missing names appear in red. Account signature fills assinatura."
+msgstr "Variáveis: nome=valor, uma por linha. As ausentes aparecem em vermelho. A assinatura da conta preenche assinatura."
+
+msgid "Select an actually sent message, then wait for a reply. Reminders never send mail automatically. The app must be open; overdue reminders appear after restart."
+msgstr "Selecione uma mensagem realmente enviada e aguarde a resposta. Lembretes nunca enviam e-mails automaticamente. O aplicativo precisa estar aberto; pendências aparecem após reiniciar."
+
+msgid "Templates: create, edit or delete in Compose, Templates. Variables use {{{{nome}}}}, {{{{valor}}}}, {{{{data}}}}, {{{{vencimento}}}}, {{{{empresa}}}}, {{{{assinatura}}}} or custom names. Configure signatures per account in Settings."
+msgstr "Modelos: crie, edite ou exclua em Escrever, Modelos. Use {{{{nome}}}}, {{{{valor}}}}, {{{{data}}}}, {{{{vencimento}}}}, {{{{empresa}}}}, {{{{assinatura}}}} ou nomes personalizados. Configure assinaturas por conta em Configurações."
+
+msgid "Sent message ID"
+msgstr "ID da mensagem enviada"
+
+msgid "Use selected message"
+msgstr "Usar mensagem selecionada"
+
+msgid "Days (1–365)"
+msgstr "Dias (1–365)"
+
+msgid "Optional template ID"
+msgstr "ID do modelo (opcional)"
+
+msgid "Wait for reply"
+msgstr "Aguardar resposta"
+
+msgid "Prepare polite follow-up"
+msgstr "Preparar retorno educado"
+
+msgid "Cancel reminder"
+msgstr "Cancelar lembrete"
+
+msgid "Prepare creates a proposal for the app approval panel, never an automatic send. Original To/Cc recipients are retained; Bcc is not reused. Custom templates with missing variables must be filled in Compose."
+msgstr "Preparar cria uma proposta para o painel de aprovação, nunca um envio automático. Destinatários Para/Cc são mantidos; Cco não é reutilizado. Preencha variáveis ausentes de modelos personalizados em Escrever."
+
+msgid "Email templates"
+msgstr "Modelos de resposta"
+
+msgid "Templates"
+msgstr "Modelos"
+
+msgid "New email template"
+msgstr "Novo modelo de resposta"
+
+msgid "Edit email template"
+msgstr "Editar modelo de resposta"
+
+msgid "New template"
+msgstr "Novo modelo"
+
+msgid "No email templates yet"
+msgstr "Nenhum modelo de resposta"
+
+msgid "Insert template {}"
+msgstr "Inserir modelo {}"
+
+msgid "Insert"
+msgstr "Inserir"
+
+msgid "Edit template"
+msgstr "Editar modelo"
+
+msgid "Delete template"
+msgstr "Excluir modelo"
+
+msgid "Template name"
+msgstr "Nome do modelo"
+
+msgid "Shortcut (optional)"
+msgstr "Atalho (opcional)"
+
+msgid "Subject (optional)"
+msgstr "Assunto (opcional)"
+
+msgid "Template message"
+msgstr "Mensagem do modelo"
+
+msgid "Save template"
+msgstr "Salvar modelo"
+
+msgid "Delete email template?"
+msgstr "Excluir modelo de resposta?"
+
+msgid "Delete this template from this device?"
+msgstr "Excluir este modelo deste dispositivo?"
+
+msgid "Email template inserted."
+msgstr "Modelo de resposta inserido."
+
+msgid "Delete"
+msgstr "Excluir"
+
+msgid "No subject"
+msgstr "Sem assunto"
+
+msgid "Edit"
+msgstr "Editar"
+
+
+msgid "Documents"
+msgstr "Documentos"
+
+msgid "Message"
+msgstr "Mensagem"
+
+msgid "Local financial attachment reader. Checksums do not prove authenticity, authorization or payment. Verify the beneficiary and amount in your bank or SEFAZ."
+msgstr "Leitor local de documentos financeiros anexados. DVs não comprovam autenticidade, autorização ou pagamento. Confira o beneficiário e o valor no banco ou na SEFAZ."
+
+msgid "Extract cached attachments"
+msgstr "Extrair anexos locais"
+
+msgid "Export indexed CSV"
+msgstr "Exportar índice em CSV"
+
+msgid "Copy key or payment code"
+msgstr "Copiar chave ou código de pagamento"
+
+msgid "Copy extracted fields"
+msgstr "Copiar campos extraídos"
+
+msgid "Only cached XML, text and text-bearing PDF files are read. Download attachments normally first. No OCR, uploads, payment initiation or automatic validation requests. CSV exports the existing local index, up to 100 records."
+msgstr "Somente XML, texto e PDF com camada de texto já baixados são lidos. Baixe os anexos normalmente primeiro. Sem OCR, uploads, pagamentos ou consultas de validação automáticas. O CSV exporta o índice local existente, até 100 registros."

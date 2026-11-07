@@ -1192,8 +1192,9 @@ async fn send_action(
     Ok(())
 }
 
-/// Tiny extension-based MIME guess for outgoing attachments.
-pub(crate) fn mime_guess_from_name(name: &str) -> String {
+/// Extension-based MIME guess shared by outgoing delivery and attachment previews.
+/// Unknown extensions use application/octet-stream; this is not content sniffing.
+pub fn mime_guess_from_name(name: &str) -> String {
     let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     match ext.as_str() {
         "pdf" => "application/pdf",
@@ -1225,6 +1226,20 @@ pub(crate) fn mime_guess_from_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn outgoing_mime_detection_is_case_insensitive_and_has_safe_fallback() {
+        assert_eq!(mime_guess_from_name("report.PDF"), "application/pdf");
+        assert_eq!(
+            mime_guess_from_name("report.docx"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        );
+        assert_eq!(mime_guess_from_name("README"), "application/octet-stream");
+        assert_eq!(
+            mime_guess_from_name("file.unknown-extension"),
+            "application/octet-stream"
+        );
+    }
 
     #[test]
     fn timed_out_action_forces_a_fresh_session() {

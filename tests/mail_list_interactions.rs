@@ -54,6 +54,7 @@ slint::slint! {
         in-out property <bool> paging: false;
         in-out property <int> revision: 0;
         callback group-toggled();
+        callback digest-requested();
         callback page-requested();
         init => { MotionSettings.enabled = false; }
 
@@ -74,6 +75,7 @@ slint::slint! {
             border-subtle: #303030;
             accent: #5ca3ff;
             toggle_mail_group(key) => { root.group-toggled(); }
+            daily-digest => { root.digest-requested(); }
             load_more => { root.page-requested(); }
         }
     }
@@ -127,9 +129,27 @@ fn toggling_a_date_group_keeps_infinite_pagination_active() {
     ui.on_group_toggled(move || count.set(count.get() + 1));
     let count = pages.clone();
     ui.on_page_requested(move || count.set(count.get() + 1));
+    let digests = Rc::new(Cell::new(0));
+    let count = digests.clone();
+    ui.on_digest_requested(move || count.set(count.get() + 1));
     ui.show().unwrap();
-
-    let position = slint::LogicalPosition::new(80.0, 82.0);
+    // The new 32px digest entry follows the 64px compact search toolbar.
+    let digest_position = slint::LogicalPosition::new(80.0, 82.0);
+    ui.window().dispatch_event(WindowEvent::PointerPressed {
+        position: digest_position,
+        button: PointerEventButton::Left,
+    });
+    ui.window().dispatch_event(WindowEvent::PointerReleased {
+        position: digest_position,
+        button: PointerEventButton::Left,
+    });
+    assert_eq!(
+        digests.get(),
+        1,
+        "the mailbox entry opens daily digest/triage"
+    );
+    // Date group moved down by the digest entry, not out of the scroll/paging area.
+    let position = slint::LogicalPosition::new(80.0, 114.0);
     ui.window().dispatch_event(WindowEvent::PointerPressed {
         position,
         button: PointerEventButton::Left,

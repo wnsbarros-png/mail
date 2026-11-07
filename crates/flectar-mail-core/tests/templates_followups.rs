@@ -1,0 +1,233 @@
+//! Synthetic offline profile: never UI-ready, no credential access or mail delivery.
+use flectar_mail_core::{
+    Core,
+    accounts::credentials::UnavailableCredentialStore,
+    config::Paths,
+    models::{Signature, SignatureDefaults},
+    templates::{self, Variables},
+};
+use std::sync::Arc;
+async fn core() -> (Core, tempfile::TempDir) {
+    let dir = tempfile::tempdir().unwrap();
+    let core = Core::start_mail_ui_with_credentials(
+        Paths::for_tests(dir.path()),
+        Arc::new(UnavailableCredentialStore),
+    )
+    .await
+    .unwrap();
+    core.db.write(|c|{c.execute_batch("INSERT INTO accounts(id,email,provider,auth_kind,username,incoming_host,incoming_port,smtp_host,smtp_port,created_at,mail_protocol,settings_json) VALUES(1,'me@example.invalid','generic','password','me','invalid',993,'invalid',587,0,'imap','{\"connection\":{\"incomingSecurity\":\"tls\",\"smtpSecurity\":\"tls\"}}');INSERT INTO sender_identities(account_id,email,is_primary,is_provider_default) VALUES(1,'me@example.invalid',1,1);INSERT INTO folders(id,account_id,path,role) VALUES(1,1,'Sent','sent');INSERT INTO threads(id,account_id) VALUES(1,1),(2,1);INSERT INTO messages(id,account_id,folder_id,thread_id,is_outgoing,is_draft,date,subject,to_json) VALUES(1,1,1,1,1,0,1700000000,'Synthetic sent','[{\"email\":\"client@example.invalid\",\"name\":\"Ana\"}]'),(2,1,1,2,0,0,1700000001,'incoming','[]'),(3,1,1,1,1,1,1700000002,'draft','[]');")?;Ok(())}).await.unwrap();
+    (core, dir)
+}
+#[tokio::test]
+async fn editable_seeds_are_once_and_deletion_is_remembered() {
+    let (c, _d) = core().await;
+    c.seed_template_examples().await.unwrap();
+    let list = c.list_snippets().await.unwrap();
+    assert_eq!(list.len(), 5);
+    let t = &list[0];
+    c.save_snippet(
+        Some(t.id),
+        "Meu exemplo".into(),
+        None,
+        Some("Custom {{chave}}".into()),
+        "Olá {{nome}}".into(),
+    )
+    .await
+    .unwrap();
+    c.seed_template_examples().await.unwrap();
+    assert_eq!(c.list_snippets().await.unwrap().len(), 5);
+    assert!(
+        c.render_email_template(t.id, None, false, Variables::new())
+            .await
+            .unwrap()
+            .missing
+            .contains(&"chave".into())
+    );
+    c.delete_snippet(t.id).await.unwrap();
+    c.seed_template_examples().await.unwrap();
+    assert_eq!(c.list_snippets().await.unwrap().len(), 4);
+}
+#[tokio::test]
+async fn per_account_new_reply_signature_and_override() {
+    let (c, _d) = core().await;
+    let mut ids = vec![];
+    for name in ["New", "Reply"] {
+        let s = c
+            .save_signature(Signature {
+                id: String::new(),
+                account_id: 1,
+                name: name.into(),
+                html: format!("<p>{name} &amp; safe</p>"),
+            })
+            .await
+            .unwrap();
+        ids.push(s.id);
+    }
+    c.set_signature_defaults(
+        1,
+        SignatureDefaults {
+            new_id: Some(ids[0].clone()),
+            reply_id: Some(ids[1].clone()),
+        },
+    )
+    .await
+    .unwrap();
+    let t = c
+        .save_snippet(
+            None,
+            "Custom".into(),
+            None,
+            Some("Olá {{nome}}".into()),
+            "{{assinatura}} {{variável}}".into(),
+        )
+        .await
+        .unwrap();
+    let mut vars = Variables::from([
+        ("nome".into(), "Ana".into()),
+        ("variável".into(), "<script>data</script>".into()),
+    ]);
+    let r = c
+        .render_email_template(t.id, Some(1), false, vars.clone())
+        .await
+        .unwrap();
+    assert!(r.body.starts_with("New & safe"));
+    assert!(r.body.contains("<script>data</script>"));
+    assert!(r.missing.is_empty());
+    let r = c
+        .render_email_template(t.id, Some(1), true, vars.clone())
+        .await
+        .unwrap();
+    assert!(r.body.starts_with("Reply & safe"));
+    assert_eq!(c.template_signature(999, true).await.unwrap(), None);
+    vars.insert("assinatura".into(), "Override".into());
+    assert!(
+        c.render_email_template(t.id, Some(1), true, vars)
+            .await
+            .unwrap()
+            .body
+            .starts_with("Override")
+    );
+}
+#[tokio::test]
+async fn actual_sent_only_days_bounds_and_reply_dedup() {
+    let (c, _d) = core().await;
+    for id in [2, 3, 999] {
+        assert!(c.set_followup(id, 3, None).await.is_err());
+    }
+    for days in [0, 366, i64::MAX] {
+        assert!(c.set_followup(1, days, None).await.is_err());
+    }
+    assert!(c.set_followup(1, 3, Some(999)).await.is_err());
+    c.set_followup(1, 3, None).await.unwrap();
+    assert_eq!(c.claim_followup_notices().await.unwrap(), 0);
+    c.db.write(|db| {
+        db.execute("UPDATE ai_followups SET due_ms=0", [])?;
+        Ok(())
+    })
+    .await
+    .unwrap();
+    assert_eq!(c.claim_followup_notices().await.unwrap(), 1);
+    assert_eq!(c.claim_followup_notices().await.unwrap(), 0);
+    assert_eq!(c.list_followups(None).await.unwrap()[0].state, "notified");
+    let suggestion = c.followup_suggestion(1).await.unwrap();
+    assert!(suggestion.body.contains("Ana"));
+    assert!(suggestion.missing.is_empty());
+    c.db.write(|db|{db.execute("INSERT INTO messages(account_id,thread_id,date,is_outgoing) VALUES(1,2,1700000001000,0),(1,1,1700000001000,1)",[])?;Ok(())}).await.unwrap();
+    assert_eq!(c.list_followups(None).await.unwrap()[0].state, "notified");
+    c.db.write(|db|{db.execute("INSERT INTO messages(account_id,thread_id,date,is_outgoing) VALUES(1,1,1700000001000,0)",[])?;Ok(())}).await.unwrap();
+    assert_eq!(c.list_followups(None).await.unwrap()[0].state, "answered");
+    assert!(c.followup_suggestion(1).await.is_err());
+    assert_eq!(c.claim_followup_notices().await.unwrap(), 0);
+}
+#[tokio::test]
+async fn cancellation_rethreading_and_draft_claim_are_persistent() {
+    let (c, _d) = core().await;
+    c.set_followup(1, 1, None).await.unwrap();
+    assert!(c.mark_followup_drafted(1).await.unwrap());
+    assert!(!c.mark_followup_drafted(1).await.unwrap());
+    c.reset_followup_draft_failure(1).await.unwrap();
+    c.cancel_followup(1).await.unwrap();
+    assert!(!c.mark_followup_drafted(1).await.unwrap());
+    assert_eq!(c.list_followups(None).await.unwrap()[0].state, "cancelled");
+    c.set_followup(1, 1, None).await.unwrap();
+    c.db.write(|db| {
+        db.execute("UPDATE messages SET thread_id=2 WHERE id=1", [])?;
+        Ok(())
+    })
+    .await
+    .unwrap();
+    assert_eq!(c.list_followups(None).await.unwrap()[0].state, "answered");
+}
+#[test]
+fn expansion_limits_blank_variables_and_send_guard() {
+    assert!(
+        templates::render("", "{{a}}", &Variables::from([("a".into(), " ".into())]))
+            .unwrap()
+            .missing
+            .contains(&"a".into())
+    );
+    assert!(
+        templates::render(
+            "",
+            "{{a}}",
+            &Variables::from([("a".into(), "x".repeat(16385))])
+        )
+        .is_err()
+    );
+    assert!(
+        templates::render(
+            "",
+            &"{{a}}".repeat(100),
+            &Variables::from([("a".into(), "x".repeat(16384))])
+        )
+        .is_err()
+    );
+    assert!(templates::ensure_filled("{{nome}}", "").is_err());
+    assert!(templates::ensure_filled("Ready", "Hello Ana").is_ok());
+    assert!(templates::parse_values("custom=A=B\ninvalid key=x").is_err());
+}
+
+#[tokio::test]
+async fn incomplete_draft_can_be_saved_but_cannot_queue_send() {
+    use flectar_mail_core::models::{Address, QueueSendArgs, SaveDraftArgs};
+    let (c, _d) = core().await;
+    let id = c
+        .save_draft(SaveDraftArgs {
+            draft_id: None,
+            account_id: 1,
+            from: None,
+            to: vec![Address {
+                email: "client@example.invalid".into(),
+                name: None,
+            }],
+            cc: vec![],
+            bcc: vec![],
+            subject: "Custom {{nome}}".into(),
+            body_text: "Unfinished {{valor}}".into(),
+            body_html: None,
+            mode: "new".into(),
+            in_reply_to_message_id: None,
+            in_reply_to_header: None,
+            attachments: vec![],
+        })
+        .await
+        .unwrap();
+    let error = c
+        .queue_send(QueueSendArgs {
+            draft_id: id,
+            send_at: None,
+        })
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("Fill template variables"));
+    assert_eq!(
+        c.db.read(|db| Ok(db.query_row(
+            "SELECT count(*) FROM pending_actions WHERE kind='send'",
+            [],
+            |r| r.get::<_, i64>(0)
+        )?))
+        .await
+        .unwrap(),
+        0
+    );
+}

@@ -32,6 +32,7 @@ export component ComposeDialog inherits Rectangle {
     in-out property <int> compose_account_id: -1;
     in property <[ComposeContact]> compose_contact_suggestions: [];
     in property <[ComposeAttachment]> compose_attachments: [];
+    in-out property <string> template-values;
     in property <[EmailTemplateRow]> compose_templates: [];
     in property <string> compose_attachment_summary: "";
     in-out property <string> compose_from_label: @tr("No connected account");
@@ -50,6 +51,11 @@ export component ComposeDialog inherits Rectangle {
     in property <bool> compose_strike_active: false;
     in property <bool> compose_code_active: false;
     in property <string> compose_active_link_url: "";
+    in-out property <string> cloud-provider;
+    in-out property <string> cloud-account;
+    in-out property <string> cloud-expiry;
+    in property <bool> cloud-required;
+    callback cloud-settings;
     callback close_compose();
     callback back-requested();
     callback save_compose(int, string, string, string, string, string, bool);
@@ -114,7 +120,13 @@ export component ComposeDialog inherits Rectangle {
         contact-suggestions: root.compose_contact_suggestions;
         attachments: root.compose_attachments;
         templates: root.compose_templates;
+        template-values <=> root.template-values;
         attachment-summary: root.compose_attachment_summary;
+        cloud-provider <=> root.cloud-provider;
+        cloud-account <=> root.cloud-account;
+        cloud-expiry <=> root.cloud-expiry;
+        cloud-required: root.cloud-required;
+        cloud-settings => {root.cloud-settings();}
         from-label <=> root.compose_from_label;
         notice: root.compose_notice;
         notice-is-error: root.compose_notice_is_error;

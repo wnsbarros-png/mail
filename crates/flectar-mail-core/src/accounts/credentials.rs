@@ -41,6 +41,8 @@ pub enum Slot {
     /// CardDAV app password. Kept separate because a user may configure
     /// different DAV providers for calendars and contacts.
     CarddavPassword,
+    /// Cloud attachment OAuth bundle, stored under app account 0.
+    DropboxOAuth,
 }
 
 impl Slot {
@@ -59,6 +61,7 @@ impl Slot {
                 format!("caldav_password:{connection_id}").into()
             }
             Slot::CarddavPassword => "carddav_password".into(),
+            Slot::DropboxOAuth => "cloud_dropbox_oauth".into(),
         }
     }
 }
@@ -256,5 +259,23 @@ mod tests {
             load_async(store, 10, Slot::Password).await.unwrap(),
             "other"
         );
+    }
+    #[tokio::test]
+    async fn clearing_ai_key_does_not_revoke_dropbox() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(MemoryStore::default());
+        let core = crate::Core::start_mail_ui_with_credentials(
+            crate::config::Paths::for_tests(dir.path()),
+            store.clone(),
+        )
+        .await
+        .unwrap();
+        store
+            .store(0, Slot::DropboxOAuth, "synthetic-only")
+            .unwrap();
+        core.set_ai_key("fake-ai-key".into()).await.unwrap();
+        core.set_ai_key(String::new()).await.unwrap();
+        assert_eq!(store.load(0, Slot::DropboxOAuth).unwrap(), "synthetic-only");
+        assert!(store.load(0, Slot::AiApiKey).is_err());
     }
 }

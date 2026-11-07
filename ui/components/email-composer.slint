@@ -1,6 +1,8 @@
+import { Button } from "button.slint";
+import { LineEdit } from "controls.slint";
 import { AccountMailPreferences } from "account-mail-preferences.slint";
 import { SettingsSelectRow } from "settings-components.slint";
-import { ScrollView, VerticalBox } from "std-widgets.slint";
+import { ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { AccountRow, ComposeAttachment, ComposeContact, ComposeEditorTile, EmailTemplateRow } from "../models.slint";
 import { ComposerFromRow, ComposerHeader, ComposerRecipients, ComposerSubject } from "composer-fields.slint";
 import { ComposerAttachments, ComposerFooter, ComposerNotice, ComposerToolbar, DiscardConfirmation, LinkEditor } from "composer-actions.slint";
@@ -26,8 +28,15 @@ export component EmailComposer inherits Rectangle {
     in-out property <int> selected-account-id: -1;
     in property <[ComposeContact]> contact-suggestions: [];
     in property <[ComposeAttachment]> attachments: [];
+    in-out property <string> template-values;
     in property <[EmailTemplateRow]> templates: [];
     in property <string> attachment-summary: "";
+    in-out property <string> cloud-provider;
+    in-out property <string> cloud-account;
+    in-out property <string> cloud-expiry;
+    in property <bool> cloud-required;
+    callback cloud-settings;
+
     in-out property <string> from-label: @tr("No connected account");
     in property <string> notice: "";
     in property <bool> notice-is-error: false;
@@ -505,6 +514,25 @@ export component EmailComposer inherits Rectangle {
             remove-attachment(index) => { root.remove-attachment(index); }
         }
 
+        if root.attachments.length > 0 : VerticalBox {
+            spacing: 4px;
+            Text {text: root.cloud-required ? @tr("Attachments exceed the account limit. Choose a cloud provider.") : @tr("Send attachments as cloud links (optional)"); color: root.body-color; wrap: word-wrap;}
+            HorizontalBox {
+                spacing: 4px;
+                Button {text: @tr("Send as link: Google Drive"); primary: root.cloud-provider == "google_drive"; enabled: !root.sending; clicked => {root.cloud-provider = "google_drive";}}
+                Button {text: @tr("Send as link: OneDrive"); primary: root.cloud-provider == "one_drive"; enabled: !root.sending; clicked => {root.cloud-provider = "one_drive";}}
+                Button {text: @tr("Send as link: Dropbox"); primary: root.cloud-provider == "dropbox"; enabled: !root.sending; clicked => {root.cloud-provider = "dropbox";}}
+            }
+            HorizontalBox {
+                spacing: 4px;
+                LineEdit {text <=> root.cloud-account; placeholder-text: @tr("Storage account ID (Google/Microsoft)"); enabled: !root.sending;}
+                LineEdit {text <=> root.cloud-expiry; placeholder-text: @tr("Expiry RFC3339 (optional, except Drive)"); enabled: !root.sending;}
+                Button {text: @tr("Cloud sign-in settings"); clicked => {root.cloud-settings();}}
+                Button {text: @tr("Use normal attachments"); enabled: !root.cloud-required && !root.sending; clicked => {root.cloud-provider = "";}}
+            }
+            if root.cloud-provider != "" : Text {text: @tr("Files upload only after approval in the app. Anyone with the link can download."); color: root.body-color; wrap: word-wrap;}
+        }
+
         ComposerNotice {
             notice: root.notice;
             notice-is-error: root.notice-is-error;
@@ -590,6 +618,7 @@ export component EmailComposer inherits Rectangle {
         open <=> root.templates-open;
         compact: root.compact;
         templates: root.templates;
+        template-values <=> root.template-values;
         draft-subject: root.subject;
         draft-body: root.body;
         notice: root.notice;

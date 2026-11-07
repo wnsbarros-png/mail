@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/flectar-mail-core", "crates/renderer-probe"]
+members = ["crates/flectar-mail-core", "crates/renderer-probe", "crates/mail-mcp"]
 exclude = ["crates/candle-core", "crates/blitz-dom", "crates/blitz-paint", "crates/i-slint-backend-winit", "crates/parley", "crates/parley_emoji"]
 resolver = "3"
 
@@ -64,6 +64,7 @@ flatpak = []
 ios = ["slint/renderer-skia"]
 
 [dependencies]
+anyhow.workspace = true
 pdfium-render = { version = "=0.9.4", default-features = false, features = ["pdfium_7881", "thread_safe"] }
 anyrender = "0.14"
 anyrender_vello = { version = "0.15", optional = true }
@@ -92,6 +93,7 @@ vello = { version = "0.11", optional = true }
 # This native shell currently exposes keyword/FTS search, not local semantic
 # search. Do not link Candle, tokenizers, or Hugging Face into every AppImage.
 flectar-mail-core = { path = "crates/flectar-mail-core", default-features = false }
+mail-mcp = { path = "crates/mail-mcp" }
 # Slint uses Fontique 0.11; Blitz beta.3 uses 0.12. Both must load
 # Fontconfig dynamically so the rendering stacks agree on the native ABI.
 fontique_0_11 = { package = "fontique", version = "=0.11.1", features = ["fontconfig-dlopen"] }
@@ -188,6 +190,7 @@ objc2-security = { version = "0.3", default-features = false, features = ["std",
 
 # This is `desktop`; keep it in step with the `mobile` alias in build.rs.
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_env = "ohos")))'.dependencies]
+notify-rust = "4.18"
 arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
 rfd = { version = "0.16", default-features = false, features = ["tokio", "xdg-portal"] }
 

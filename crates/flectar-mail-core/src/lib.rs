@@ -8,13 +8,16 @@ pub mod autolabel;
 pub mod caldav;
 pub mod calendar;
 pub mod carddav;
+pub mod cloud_links;
 pub mod config;
 pub mod db;
+pub mod documents;
 pub mod embed;
 pub mod error;
 pub mod events;
 mod file_io;
 pub mod files;
+pub mod followups;
 pub mod googlecal;
 pub mod graph;
 pub mod graphcal;
@@ -39,6 +42,8 @@ pub mod sender_identities;
 pub mod signatures;
 pub mod smtp;
 pub mod sync;
+pub mod templates;
+pub mod triage;
 pub mod unsubscribe;
 pub mod verification_code;
 
@@ -825,6 +830,10 @@ pub struct Core {
 }
 
 impl Core {
+    /// Profile-local policy and audit files; never a credential location.
+    pub fn profile_data_dir(&self) -> &std::path::Path {
+        &self.paths.data_dir
+    }
     #[cfg(desktop)]
     pub async fn start(paths: Paths) -> Result<Core> {
         Self::start_with_platform(
@@ -5229,6 +5238,14 @@ impl Core {
             .db
             .read(move |conn| {
                 let detail = repo::messages::detail(conn, draft_id)?;
+                crate::templates::ensure_filled(
+                    &detail.subject,
+                    &format!(
+                        "{}\n{}",
+                        detail.text_body.as_deref().unwrap_or_default(),
+                        detail.html_body.as_deref().unwrap_or_default()
+                    ),
+                )?;
                 let config = repo::accounts::get_config(conn, detail.account_id)?
                     .ok_or_else(|| CoreError::NotFound("account".into()))?;
                 let bcc: String = conn.query_row(
@@ -7082,7 +7099,8 @@ impl Core {
 
     pub async fn set_ai_key(&self, api_key: String) -> Result<()> {
         if api_key.trim().is_empty() {
-            credentials::delete_all_async(self.credentials.clone(), 0).await?;
+            // Other profile-level credentials (e.g. Dropbox) are independent.
+            credentials::delete_async(self.credentials.clone(), 0, Slot::AiApiKey).await?;
             return Ok(());
         }
         credentials::store_async(

@@ -1,0 +1,32 @@
+[package]
+name = "mail-mcp"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+publish = false
+description = "Local Model Context Protocol (MCP) server that lets an AI assistant work with the mail client's accounts"
+
+[[bin]]
+name = "mail-mcp"
+path = "src/main.rs"
+
+[dependencies]
+flectar-mail-core = { path = "../flectar-mail-core", default-features = false }
+tokio = { workspace = true, features = ["io-std"] }
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.9"
+tempfile = "3"
+
+[dev-dependencies]
+async-trait = "0.1"
+tempfile = "3"
+
+# Linux build hosts without libdbus development files can build the Secret
+# Service client from source. Windows and macOS use their native keychains.
+[target.'cfg(target_os = "linux")'.dependencies]
+libdbus-sys = { version = "0.2", features = ["vendored"] }

@@ -151,6 +151,7 @@ export component MailView inherits FocusScope {
     callback request_label_delete(int, string, string, bool, bool);
     callback load_more();
     callback sync_mail();
+    callback daily-digest;
     callback message_action(string);
     callback message_action_for_email(int, string);
     callback bulk_message_action(string);
@@ -385,6 +386,7 @@ export component MailView inherits FocusScope {
                 set_search_filter(filter) => { root.set_search_filter(filter); }
                 load_more => { root.load_more(); }
                 sync_mail => { root.sync_mail(); }
+                daily-digest=>{root.daily-digest();}
                 open_compose => { root.open_compose(); }
                 message_action_for_email(id, action) => {
                     root.message_action_for_email(id, action);
@@ -625,6 +627,7 @@ export component MailView inherits FocusScope {
                 set_search_filter(filter) => { root.set_search_filter(filter); }
                 load_more => { root.load_more(); }
                 sync_mail => { root.sync_mail(); }
+                daily-digest=>{root.daily-digest();}
                 open_folders => { root.folders-open = true; }
                 open_compose => { root.open_compose(); }
                 message_action_for_email(id, action) => {

@@ -32,6 +32,16 @@ pub fn save(
     subject: Option<&str>,
     body_text: &str,
 ) -> Result<Snippet> {
+    if name.trim().is_empty()
+        || name.len() > 200
+        || shortcut.is_some_and(|s| s.len() > 80)
+        || subject.is_some_and(|s| s.len() > 4096)
+        || body_text.len() > 64 * 1024
+    {
+        return Err(crate::error::CoreError::Other(
+            "Template fields exceed limits (name 200 B, subject 4 KiB, body 64 KiB)".into(),
+        ));
+    }
     let id = match id {
         Some(id) => {
             conn.execute(
