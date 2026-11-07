@@ -17,7 +17,7 @@ export component DocumentsDialog inherits Rectangle {
   Text {text:root.status;wrap:word-wrap;color:#475569;}
   ScrollView {vertical-stretch:1;content-width:self.width;
    VerticalLayout {spacing:12px;
-    for row in root.rows: Rectangle {height:400px;background:#fff;border-color:#cbd5e1;border-width:1px;border-radius:8px;
+    for row in root.rows: Rectangle {height:440px;background:#fff;border-color:#cbd5e1;border-width:1px;border-radius:8px;
      VerticalLayout {padding:12px;spacing:8px;
       Text {text:row.title;color:#172033;font-size:20px;font-weight:600;overflow:elide;}
       Text {text:row.summary;wrap:word-wrap;color:#334155;}

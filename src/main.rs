@@ -11,6 +11,7 @@ mod attachment_controller;
 #[cfg(desktop)]
 mod autostart;
 mod browser;
+#[cfg(desktop)]
 mod documents_controller;
 #[cfg(desktop)]
 mod followup_controller;
@@ -2017,7 +2018,9 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
     let state = Rc::new(RefCell::new(initial_state));
     #[cfg(desktop)]
     documents_controller::register(&app, &state, &runtime);
+    #[cfg(desktop)]
     let _followup_timer = followup_controller::register(&app, &state, &runtime);
+    #[cfg(desktop)]
     let _daily_digest_timer = triage_controller::register(&app, &state, &runtime);
     #[cfg(desktop)]
     let _ai_review_timer = ai_controller::register(&app, &state, &runtime, &platform.external_urls);
@@ -5603,6 +5606,7 @@ pub fn run(platform: PlatformContext) -> Result<(), Box<dyn std::error::Error>> 
             return;
         };
         if action == "documents" {
+            #[cfg(desktop)]
             documents_controller::open(&app, &state_for_action);
             return;
         }

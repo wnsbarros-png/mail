@@ -170,6 +170,7 @@ impl Core {
             // One bounded PDF/XML parser at a time, off the UI/async executor.
             let guard = PARSE_LOCK.lock().await;
             let parsed = tokio::task::spawn_blocking(move || {
+                let _guard = guard;
                 parse_bytes(&filename, &bytes, reference, &body)
             })
             .await;

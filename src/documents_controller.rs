@@ -80,6 +80,19 @@ fn summary(d: &FinancialDocument) -> String {
         d.confidence,
         d.item_count
     );
+    if let Some(key) = &d.access_key {
+        s.push_str(&format!("\nChave · Access key: {key}"));
+    }
+    if let Some(code) = d.fields.get("bank_code") {
+        s.push_str(&format!("\nBanco · Bank: {code}"));
+    }
+    if let Some(code) = &d.code {
+        let preview = code.chars().take(64).collect::<String>();
+        s.push_str(&format!(
+            "\nCódigo · Code: {preview}{}",
+            if code.chars().count() > 64 { "…" } else { "" }
+        ));
+    }
     if !d.items.is_empty() {
         s.push_str(&format!(
             "\nItens · Items: {}",
