@@ -11,7 +11,7 @@ use std::{
     cell::RefCell,
     rc::Rc,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -92,10 +92,66 @@ fn decode(v: serde_json::Value) -> anyhow::Result<Digest> {
     Ok(serde_json::from_value(v)?)
 }
 
+type ReadTicket = Arc<Mutex<Option<(String, Option<i64>, bool, String)>>>;
+async fn read_digest(
+    source: &crate::mail::CoreMailSource,
+    date: &str,
+    settings: &Settings,
+    ticket: &ReadTicket,
+) -> anyhow::Result<Digest> {
+    let previous = ticket
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Digest state unavailable"))?
+        .clone();
+    let server = source.ai_server();
+    if let Some((saved_date, account, enhance, id)) = previous
+        && saved_date == date
+        && account == settings.account_id
+        && enhance == settings.ai_enhancement
+    {
+        let value = server
+            .call_tool_from_app("get_action_result", &json!({"pendingId":id}))
+            .await?;
+        if value["status"] == "completed" {
+            *ticket
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Digest state unavailable"))? = None;
+            return decode(value["result"].clone());
+        }
+        let still_pending = server
+            .pending_actions()
+            .await
+            .iter()
+            .any(|v| v["pendingId"] == id);
+        if !still_pending {
+            *ticket
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Digest state unavailable"))? = None;
+        }
+        anyhow::bail!(
+            "Aguardando aprovação, ou resultado expirou/foi cancelado; feche o resumo e revise o painel. / Awaiting approval, or result expired/cancelled; close the digest and review the panel."
+        );
+    }
+    let args =
+        json!({"date":date,"accountId":settings.account_id,"enhance":settings.ai_enhancement});
+    let value = server.call_tool_from_app("get_digest", &args).await?;
+    if let Some(id) = value.get("pendingId").and_then(|v| v.as_str()) {
+        *ticket
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Digest state unavailable"))? = Some((
+            date.into(),
+            settings.account_id,
+            settings.ai_enhancement,
+            id.into(),
+        ));
+    }
+    decode(value)
+}
 async fn load(
     source: &crate::mail::CoreMailSource,
     date: String,
     desired: Option<Settings>,
+    ticket: &ReadTicket,
 ) -> anyhow::Result<(Digest, Settings)> {
     let core = source.file_core();
     if let Some(s) = desired {
@@ -107,16 +163,12 @@ async fn load(
         core.save_digest_settings(s).await?;
     }
     let settings = core.digest_settings().await?;
-    let args =
-        json!({"date":date,"accountId":settings.account_id,"enhance":settings.ai_enhancement});
-    let value = source
-        .ai_server()
-        .call_tool_from_app("get_digest", &args)
-        .await?;
-    Ok((decode(value)?, settings))
+    let digest = read_digest(source, &date, &settings, ticket).await?;
+    Ok((digest, settings))
 }
 async fn daily_tick(
     source: &crate::mail::CoreMailSource,
+    ticket: &ReadTicket,
 ) -> anyhow::Result<Option<(Digest, &'static str)>> {
     let core = source.file_core();
     let s = core.digest_settings().await?;
@@ -128,8 +180,7 @@ async fn daily_tick(
         return Ok(None);
     }
     let server = source.ai_server();
-    let args = json!({"date":day,"accountId":s.account_id,"enhance":s.ai_enhancement});
-    let d = decode(server.call_tool_from_app("get_digest", &args).await?)?;
+    let d = read_digest(source, &day, &s, ticket).await?;
     let status = if s.email_to_self {
         let id = s
             .account_id
@@ -156,7 +207,12 @@ async fn daily_tick(
     };
     Ok(Some((d, status)))
 }
-fn register_commands(app: &AppWindow, state: &Rc<RefCell<InboxState>>, runtime: &Handle) {
+fn register_commands(
+    app: &AppWindow,
+    state: &Rc<RefCell<InboxState>>,
+    runtime: &Handle,
+    ticket: ReadTicket,
+) {
     let weak = app.as_weak();
     let state_weak = Rc::downgrade(state);
     let handle = runtime.clone();
@@ -180,9 +236,10 @@ fn register_commands(app: &AppWindow, state: &Rc<RefCell<InboxState>>, runtime: 
         let initial=command=="load";
         let date=if app.get_digest_date().is_empty() {triage::today()} else {app.get_digest_date().to_string()};
         let weak=weak.clone();
+        let ticket=ticket.clone();
         app.set_digest_busy(true);
         handle.spawn(async move {
-            let result=load(&source,date,desired).await;
+            let result=load(&source,date,desired,&ticket).await;
             let _lease=source;
             let _=weak.upgrade_in_event_loop(move |app| {
                 app.set_digest_busy(false);
@@ -240,7 +297,8 @@ pub(crate) fn register(
     state: &Rc<RefCell<InboxState>>,
     runtime: &Handle,
 ) -> slint::Timer {
-    register_commands(app, state, runtime);
+    let ticket: ReadTicket = Arc::new(Mutex::new(None));
+    register_commands(app, state, runtime, ticket.clone());
     register_corrections(app, state, runtime);
     let weak = app.as_weak();
     let state_weak = Rc::downgrade(state);
@@ -252,9 +310,10 @@ pub(crate) fn register(
         let Some(source)=state.borrow().core.clone() else {return;};
         if flight.swap(true,Ordering::AcqRel) {return;}
         let flight=flight.clone();
+        let ticket=ticket.clone();
         let weak=weak.clone();
         handle.spawn(async move {
-            let result=daily_tick(&source).await;
+            let result=daily_tick(&source,&ticket).await;
             flight.store(false,Ordering::Release);
             let _lease=source;
             let _=weak.upgrade_in_event_loop(move |app| {
