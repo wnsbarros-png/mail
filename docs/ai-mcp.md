@@ -703,3 +703,7 @@ são limitados para respeitar os quadros de 2 MiB da ponte. Assunto/trecho: até
 caracteres, sem corpos. O e-mail contém contagens e até 200 itens, com aviso de limite.
 O agendamento resume o dia local atual até aquele momento, não as últimas 24 horas;
 mensagens posteriores aparecem ao atualizar manualmente.
+
+Optional AI enhancement has a 30-second total budget per digest; unfinished items retain
+local categories. / A IA opcional tem limite total de 30 segundos por resumo; itens não
+concluídos mantêm a categoria local.

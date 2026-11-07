@@ -281,14 +281,19 @@ impl Core {
                 .ai_config_from(&settings, crate::Scenario::Categorize)
                 .await
             {
+                let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
                 for item in items
                     .iter_mut()
                     .filter(|i| i.category == Category::Other && i.reason != "sender.correction")
                     .take(20)
                 {
-                    if let Ok(cat) = enhance(&cfg, item).await {
-                        item.category = cat;
-                        item.reason = "ai.enhancement".into();
+                    match tokio::time::timeout_at(deadline, enhance(&cfg, item)).await {
+                        Ok(Ok(cat)) => {
+                            item.category = cat;
+                            item.reason = "ai.enhancement".into();
+                        }
+                        Ok(Err(_)) => {}
+                        Err(_) => break,
                     }
                 }
             }
