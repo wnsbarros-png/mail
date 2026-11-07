@@ -23,6 +23,7 @@ export component OnboardingView inherits Rectangle {
     in-out property <bool> oauth-setup-open: false;
     callback save-oauth-apps(string, string, string);
     callback cloud-settings;
+    callback ai-policy-settings;
     in property <bool> oauth-settings-saving: false;
     in-out property <string> oauth-settings-error: "";
     in property <bool> startup-ready: false;
@@ -448,6 +449,7 @@ export component OnboardingView inherits Rectangle {
 
     OAuthSetupDialog {
         cloud-settings => {root.cloud-settings();}
+        ai-policy-settings => {root.ai-policy-settings();}
         open <=> root.oauth-setup-open;
         saving: root.oauth-settings-saving;
         save-error <=> root.oauth-settings-error;

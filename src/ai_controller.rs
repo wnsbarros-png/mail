@@ -21,6 +21,7 @@ pub(crate) fn register(
     opener: &ExternalUrlOpener,
 ) -> slint::Timer {
     register_cloud_auth(app, state, runtime, opener);
+    crate::ai_policy_controller::register(app, state, runtime);
     let weak_state = Rc::downgrade(state);
     let weak_app = app.as_weak();
     let handle = runtime.clone();
@@ -295,6 +296,37 @@ fn readable_summary(s: &Value) -> String {
         _ => "Revisar ação",
     };
     let mut out = format!("{action}\n");
+    if let Some(applied) = s["policy"]["applied"].as_array() {
+        out.push_str(&format!(
+            "Regra / Rule: {}\n",
+            applied
+                .iter()
+                .filter_map(|r| r["rule_id"].as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if s["action"] == "tool_request" {
+        out.push_str(&format!(
+            "Operação / Operation: {}\nContas / Accounts: {}\n",
+            visible(s["tool"].as_str().unwrap_or_default()),
+            s["accountIds"]
+        ));
+        for key in [
+            "messageId",
+            "messageIds",
+            "query",
+            "folder",
+            "filename",
+            "read",
+        ] {
+            if let Some(value) = s["request"].get(key) {
+                out.push_str(&format!("{key}: {}\n", visible(&value.to_string())));
+            }
+        }
+        return out;
+    }
+
     if s.get("messageIds").is_some() {
         out.push_str(&format!("Mensagens: {}\n", s["messageIds"]));
         return out;
@@ -358,6 +390,7 @@ mod tests {
         Platform, WindowAdapter, WindowEvent,
         software_renderer::{MinimalSoftwareWindow, RepaintBufferType},
     };
+    use slint::{ModelRc, VecModel};
     struct Headless(Rc<MinimalSoftwareWindow>);
     impl Platform for Headless {
         fn create_window_adapter(&self) -> Result<Rc<dyn WindowAdapter>, slint::PlatformError> {
@@ -428,5 +461,59 @@ mod tests {
         image.save(output).unwrap();
         assert_eq!(app.get_ai_pending_count(), 1);
         assert!(!app.get_ai_pending_summary().is_empty());
+    }
+    #[test]
+    #[ignore = "writes a synthetic rules screenshot; run explicitly with --exact"]
+    fn policy_settings_screenshot() {
+        let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+        slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
+        let app = AppWindow::new().unwrap();
+        app.set_startup_ready(true);
+        app.set_startup_hydrated(true);
+        slint::select_bundled_translation("pt_BR").unwrap();
+        app.set_ai_policy_open(true);
+        app.set_ai_policy_action(4);
+        app.set_ai_policy_mode(1);
+        app.set_ai_policy_rules(ModelRc::new(VecModel::from(vec![
+            "Nova regra".into(),
+            "permitir-contatos".into(),
+            "bloquear-anexos-externos".into(),
+        ])));
+        app.set_ai_policy_form(crate::PolicyRuleForm {
+            id: "permitir-contatos".into(),
+            action_index: 4,
+            mode_index: 0,
+            accounts: "1".into(),
+            domains: "example.invalid".into(),
+            known_index: 1,
+            max_count: "3".into(),
+            cloud_index: 2,
+            ..Default::default()
+        });
+        app.set_ai_policy_history("Exemplo sintético — horário local (America/Cuiaba)\n\n20:00:00  Cliente MCP · Enviar\nRegra: padrão.send · Perguntar\nResultado: aguardando aprovação no aplicativo\nDestinatários: 2; novos: 1; anexos: sim\n\n20:00:15  Aprovação no aplicativo · Enviar\nRegra: padrão.send · Perguntar\nResultado: aprovado; enfileirado (simulado)\n\n20:01:00  Cliente MCP · Upload na nuvem\nRegra: invariante.cloud_requires_app_approval\nResultado: aguardando aprovação no aplicativo\n\n20:02:00  Cliente MCP · Excluir permanentemente\nRegra: padrão.permanent_delete · Bloquear\nResultado: bloqueado\n\nNenhum corpo, assunto, endereço ou token é registrado.".into());
+        app.set_ai_policy_status(
+            "Dados sintéticos: nenhuma conta real, nenhum upload ou e-mail enviado.".into(),
+        );
+        app.window()
+            .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.0 });
+        app.window().set_size(slint::PhysicalSize::new(1280, 900));
+        app.show().unwrap();
+        let mut pixels = vec![slint::Rgb8Pixel::default(); 1280 * 900];
+        for _ in 0..3 {
+            slint::platform::update_timers_and_animations();
+            app.window().request_redraw();
+            window.draw_if_needed(|renderer| {
+                renderer.render(&mut pixels, 1280);
+            });
+        }
+        let bytes = pixels.iter().flat_map(|p| [p.r, p.g, p.b]).collect();
+        let image = image::RgbImage::from_raw(1280, 900, bytes).unwrap();
+        image
+            .save(
+                std::env::var_os("MAIL_AI_POLICY_SCREENSHOT")
+                    .unwrap_or_else(|| "ai-policy-settings-pt-BR.png".into()),
+            )
+            .unwrap();
+        assert!(app.get_ai_policy_open());
     }
 }

@@ -1,0 +1,94 @@
+import { VerticalBox, HorizontalBox, ScrollView, ComboBox, CheckBox } from "std-widgets.slint";
+import { Button } from "../components/button.slint";
+import { LineEdit } from "../components/controls.slint";
+import { AppTheme } from "../design-system.slint";
+export struct PolicyRuleForm {
+    id: string, action-index: int, mode-index: int, accounts: string, addresses: string, domains: string,
+    known-index: int, new-index: int, min-count: string, max-count: string,
+    attachments-index: int, cloud-index: int, override-new: bool,
+}
+export component AiPolicyDialog inherits Rectangle {
+    in-out property <bool> open;
+    in-out property <int> action-index;
+    in-out property <int> mode-index;
+    in-out property <PolicyRuleForm> form;
+    in property <[string]> rules;
+    in property <string> history;
+    in property <string> status;
+    in property <bool> busy;
+    callback select-action(int);
+    callback edit-rule(int);
+    callback save-default;
+    callback save-rule;
+    callback remove-rule;
+    callback reload;
+    callback restore-defaults;
+    private property <[string]> actions: [@tr("List accounts, folders and messages"),@tr("Read and monitor messages"),@tr("Search messages"),@tr("Mark read or unread"),@tr("Send messages"),@tr("Reply to messages"),@tr("Move to trash"),@tr("Permanently delete"),@tr("Upload cloud attachments"),@tr("Download attachments"),@tr("Request synchronization")];
+    private property <[string]> modes: [@tr("Always allow"),@tr("Ask"),@tr("Block")];
+    private property <[string]> conditions: [@tr("Any"),@tr("Yes"),@tr("No")];
+    changed action-index => {root.select-action(root.action-index);}
+    visible: root.open; background: #00000088;
+    TouchArea {}
+    Rectangle {
+        width: min(1080px,parent.width - 24px); height: min(750px,parent.height - 24px);
+        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+        background: AppTheme.surface; border-radius: 12px;
+        VerticalBox {
+            padding: 20px; spacing: 8px;
+            Text {text: @tr("AI approval rules and history"); color: AppTheme.heading; font-size: 20px; font-weight: 600;}
+            Text {text: @tr("Cloud uploads always ask in the app. New recipients always ask unless a matching Allow rule explicitly overrides this protection."); color: AppTheme.heading; wrap: word-wrap;}
+            HorizontalBox {
+                spacing: 16px;
+                ScrollView {
+                    width: (parent.width - 16px)/2;
+                    min-width: 0px;
+                    horizontal-scrollbar-policy: always-off;
+                    horizontal-stretch: 1;
+                    VerticalBox {
+                        padding: 0px; spacing: 8px;
+                        Text {text: @tr("Default per action"); color: AppTheme.heading; font-weight: 600;}
+                        ComboBox {model: root.actions; current-index <=> root.action-index; enabled: !root.busy;}
+                        ComboBox {model: root.modes; current-index <=> root.mode-index; enabled: !root.busy;}
+                        Button {text: @tr("Save action default"); enabled: !root.busy; clicked => {root.save-default();}}
+                        Text {text: @tr("Conditional rules (blocks win; otherwise first match)"); color: AppTheme.heading; wrap: word-wrap; font-weight: 600;}
+                        ComboBox {model: root.rules; enabled: !root.busy; selected(value) => {root.edit-rule(self.current-index);}}
+                        LineEdit {text <=> root.form.id; placeholder-text: @tr("Rule ID (letters, digits, dot, dash, underscore)"); enabled: !root.busy;}
+                        ComboBox {model: root.actions; current-index <=> root.form.action-index; enabled: !root.busy;}
+                        ComboBox {model: root.modes; current-index <=> root.form.mode-index; enabled: !root.busy;}
+                        LineEdit {text <=> root.form.accounts; placeholder-text: @tr("Mail account IDs, comma-separated (empty: any)"); enabled: !root.busy;}
+                        LineEdit {text <=> root.form.addresses; placeholder-text: @tr("Exact allowed addresses, comma-separated"); enabled: !root.busy;}
+                        LineEdit {text <=> root.form.domains; placeholder-text: @tr("Exact allowed domains, comma-separated (no wildcard)"); enabled: !root.busy;}
+                        HorizontalBox {Text {text: @tr("All recipients are saved contacts"); color: AppTheme.heading; wrap: word-wrap;} ComboBox {model: root.conditions; current-index <=> root.form.known-index;}}
+                        HorizontalBox {Text {text: @tr("Contains new recipients"); color: AppTheme.heading;} ComboBox {model: root.conditions; current-index <=> root.form.new-index;}}
+                        HorizontalBox {
+                            LineEdit {text <=> root.form.min-count; placeholder-text: @tr("Minimum recipients (optional)");}
+                            LineEdit {text <=> root.form.max-count; placeholder-text: @tr("Maximum recipients (optional)");}
+                        }
+                        HorizontalBox {Text {text: @tr("Has attachments"); color: AppTheme.heading;} ComboBox {model: root.conditions; current-index <=> root.form.attachments-index;}}
+                        HorizontalBox {Text {text: @tr("Has cloud links"); color: AppTheme.heading;} ComboBox {model: root.conditions; current-index <=> root.form.cloud-index;}}
+                        CheckBox {text: @tr("Allow new recipients without asking (dangerous)"); checked <=> root.form.override-new; enabled: !root.busy;}
+                        Text {text: @tr("All conditions must match. Allow requires every recipient/account to match; Block/Ask matches any account or allowlist recipient. Domains are exact, not suffix matches."); color: AppTheme.secondary; wrap: word-wrap;}
+                        HorizontalBox {
+                            Button {text: @tr("Save rule"); enabled: !root.busy; clicked => {root.save-rule();}}
+                            Button {text: @tr("Remove rule"); enabled: !root.busy; clicked => {root.remove-rule();}}
+                        }
+                    }
+                }
+                VerticalBox {
+                    width: (parent.width - 16px)/2;
+                    min-width: 0px;
+                    horizontal-stretch: 1;
+                    Text {text: @tr("Read-only action history (latest 200)"); color: AppTheme.heading; font-weight: 600;}
+                    Text {text: @tr("Actor, action, local time, rule and result only. No message bodies, subjects, recipient addresses, file paths or credentials are logged."); color: AppTheme.secondary; wrap: word-wrap;}
+                    ScrollView {vertical-stretch: 1; horizontal-scrollbar-policy: always-off; Text {width: parent.width; text: root.history; color: AppTheme.heading; wrap: word-wrap; vertical-alignment: top;}}
+                }
+            }
+            Text {text: root.status; color: AppTheme.heading; wrap: word-wrap;}
+            HorizontalBox {
+                Button {text: @tr("Reload rules and history"); enabled: !root.busy; clicked => {root.reload();}}
+                Button {text: @tr("Restore safe defaults"); enabled: !root.busy; clicked => {root.restore-defaults();}}
+                Button {text: @tr("Close"); enabled: !root.busy; clicked => {root.open = false;}}
+            }
+        }
+    }
+}

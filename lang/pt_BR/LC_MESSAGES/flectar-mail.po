@@ -112,3 +112,123 @@ msgstr "Anexos adicionados: {}. Ignorados: {} (duplicados, ilegíveis ou acima d
 
 msgid "Sign-in settings"
 msgstr "Configurações de login"
+
+msgid "AI approval rules and history"
+msgstr "Regras de aprovação e histórico da IA"
+
+msgid "Cloud uploads always ask in the app. New recipients always ask unless a matching Allow rule explicitly overrides this protection."
+msgstr "Uploads na nuvem sempre exigem aprovação no aplicativo. Novos destinatários sempre exigem aprovação, exceto quando uma regra Permitir substitui explicitamente essa proteção."
+
+msgid "List accounts, folders and messages"
+msgstr "Listar contas, pastas e mensagens"
+
+msgid "Read and monitor messages"
+msgstr "Ler e monitorar mensagens"
+
+msgid "Search messages"
+msgstr "Pesquisar mensagens"
+
+msgid "Mark read or unread"
+msgstr "Marcar como lida ou não lida"
+
+msgid "Send messages"
+msgstr "Enviar mensagens"
+
+msgid "Reply to messages"
+msgstr "Responder mensagens"
+
+msgid "Move to trash"
+msgstr "Mover para a lixeira"
+
+msgid "Permanently delete"
+msgstr "Excluir permanentemente"
+
+msgid "Upload cloud attachments"
+msgstr "Enviar anexos à nuvem"
+
+msgid "Download attachments"
+msgstr "Baixar anexos"
+
+msgid "Request synchronization"
+msgstr "Solicitar sincronização"
+
+msgid "Always allow"
+msgstr "Sempre permitir"
+
+msgid "Ask"
+msgstr "Perguntar"
+
+msgid "Block"
+msgstr "Bloquear"
+
+msgid "Any"
+msgstr "Qualquer"
+
+msgid "Yes"
+msgstr "Sim"
+
+msgid "No"
+msgstr "Não"
+
+msgid "Default per action"
+msgstr "Padrão por tipo de ação"
+
+msgid "Save action default"
+msgstr "Salvar padrão da ação"
+
+msgid "Conditional rules (blocks win; otherwise first match)"
+msgstr "Regras condicionais (bloqueios prevalecem; depois, primeira regra aplicável)"
+
+msgid "Rule ID (letters, digits, dot, dash, underscore)"
+msgstr "ID da regra (letras, números, ponto, hífen e sublinhado)"
+
+msgid "Mail account IDs, comma-separated (empty: any)"
+msgstr "IDs das contas, separados por vírgula (vazio: qualquer)"
+
+msgid "Exact allowed addresses, comma-separated"
+msgstr "Endereços exatos permitidos, separados por vírgula"
+
+msgid "Exact allowed domains, comma-separated (no wildcard)"
+msgstr "Domínios exatos permitidos, separados por vírgula (sem curinga)"
+
+msgid "All recipients are saved contacts"
+msgstr "Todos os destinatários são contatos salvos"
+
+msgid "Contains new recipients"
+msgstr "Contém novos destinatários"
+
+msgid "Minimum recipients (optional)"
+msgstr "Mínimo de destinatários (opcional)"
+
+msgid "Maximum recipients (optional)"
+msgstr "Máximo de destinatários (opcional)"
+
+msgid "Has attachments"
+msgstr "Tem anexos"
+
+msgid "Has cloud links"
+msgstr "Tem links na nuvem"
+
+msgid "Allow new recipients without asking (dangerous)"
+msgstr "Permitir novos destinatários sem perguntar (perigoso)"
+
+msgid "All conditions must match. Allow requires every recipient/account to match; Block/Ask matches any account or allowlist recipient. Domains are exact, not suffix matches."
+msgstr "Todas as condições devem corresponder. Permitir exige todos os destinatários/contas; Bloquear/Perguntar corresponde a qualquer conta ou destinatário da lista. Domínios são exatos, sem comparação por sufixo."
+
+msgid "Save rule"
+msgstr "Salvar regra"
+
+msgid "Remove rule"
+msgstr "Remover regra"
+
+msgid "Read-only action history (latest 200)"
+msgstr "Histórico somente leitura (últimas 200 ações)"
+
+msgid "Actor, action, local time, rule and result only. No message bodies, subjects, recipient addresses, file paths or credentials are logged."
+msgstr "Somente autor, ação, horário local, regra e resultado. Corpos, assuntos, endereços, caminhos de arquivos e credenciais não são registrados."
+
+msgid "Reload rules and history"
+msgstr "Recarregar regras e histórico"
+
+msgid "Restore safe defaults"
+msgstr "Restaurar padrões seguros"

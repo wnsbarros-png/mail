@@ -78,7 +78,7 @@ async fn initialize_and_list_tools() {
         send["description"]
             .as_str()
             .unwrap()
-            .contains("Requires confirmation")
+            .contains("per-action AI policy")
     );
     let bad = call(&s, 3, "nope", json!({})).await;
     assert_eq!(bad["error"]["code"], -32601);

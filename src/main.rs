@@ -4,6 +4,7 @@ mod account_mail_preferences;
 mod account_removal_tests;
 #[cfg(desktop)]
 mod ai_controller;
+mod ai_policy_controller;
 mod app_icon;
 mod app_runtime;
 mod attachment_controller;

@@ -1,3 +1,5 @@
+import { AiPolicyDialog, PolicyRuleForm } from "dialogs/ai-policy-dialog.slint";
+export { PolicyRuleForm } from "dialogs/ai-policy-dialog.slint";
 import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 export { AccountMailPreferences, SignatureChoice } from "components/account-mail-preferences.slint";
 import { OpenPgpReader } from "components/account-mail-preferences.slint";
@@ -783,6 +785,19 @@ export component AppWindow inherits Window {
     in-out property <string> dropbox-app-key;
     in-out property <string> cloud-auth-account;
     callback cloud-connect(string,string,string);
+    in-out property <bool> ai-policy-open;
+    in-out property <bool> ai-policy-busy;
+    in-out property <int> ai-policy-action;
+    in-out property <int> ai-policy-mode;
+    in-out property <PolicyRuleForm> ai-policy-form;
+    in property <[string]> ai-policy-rules;
+    in property <string> ai-policy-history;
+    in-out property <string> ai-policy-status;
+    in-out property <string> ai-policy-config-json;
+    callback ai-policy-select(int);
+    callback ai-policy-edit(int);
+    callback ai-policy-command(string);
+    changed ai-policy-open => {if root.ai-policy-open {root.ai-policy-command("load");}}
     in-out property <string> ai-pending-id;
     in-out property <string> ai-pending-summary;
     in-out property <int> ai-pending-count;
@@ -2100,6 +2115,7 @@ export component AppWindow inherits Window {
             }
             clear_contact_suggestions => { return root.clear_contact_suggestions(); }
             set_close_to_tray(enabled) => { root.set_close_to_tray(enabled); }
+            ai-policy-settings => {root.ai-policy-open = true;}
             set_launch_at_login(enabled) => { root.set_launch_at_login(enabled); }
             sync_mail => { root.sync_mail(); }
             sync_account(account-id) => { root.sync_account(account-id); }
@@ -2377,6 +2393,7 @@ export component AppWindow inherits Window {
         ms-client-id: root.ms_client_id;
         oauth-setup-open <=> root.oauth_setup_open;
         cloud-settings => {root.cloud-settings-open = true;}
+        ai-policy-settings => {root.ai-policy-open = true;}
         save-oauth-apps(google-id, google-secret, microsoft-id) => {
             root.save_oauth_apps(google-id, google-secret, microsoft-id);
         }
@@ -2427,6 +2444,7 @@ export component AppWindow inherits Window {
             background: root.surface; border-radius: 12px;
             VerticalBox {
                 padding: 24px; spacing: 12px;
+                Button {text: @tr("AI approval rules and history"); clicked => {root.ai-policy-open = true;}}
                 Text {text: @tr("Cloud sign-in settings"); color: root.body-text; font-size: 20px;}
                 Text {text: @tr("Use an existing Gmail/Microsoft account ID. Dropbox uses its own public app key. Tokens stay in the OS keyring."); color: root.body-text; wrap: word-wrap;}
                 LineEdit {text <=> root.cloud-auth-account; placeholder-text: @tr("Storage account ID (Google/Microsoft)"); enabled: !root.cloud-auth-busy;}
@@ -2441,6 +2459,23 @@ export component AppWindow inherits Window {
                 Button {text: @tr("Close"); enabled: !root.cloud-auth-busy; clicked => {root.cloud-settings-open = false;}}
             }
         }
+    }
+
+    if root.ai-policy-open : AiPolicyDialog {
+        z: 19500; width: parent.width; height: parent.height;
+        open <=> root.ai-policy-open;
+        action-index <=> root.ai-policy-action;
+        mode-index <=> root.ai-policy-mode;
+        form <=> root.ai-policy-form;
+        rules: root.ai-policy-rules; history: root.ai-policy-history;
+        status: root.ai-policy-status; busy: root.ai-policy-busy;
+        select-action(index) => {root.ai-policy-select(index);}
+        edit-rule(index) => {root.ai-policy-edit(index);}
+        save-default => {root.ai-policy-command("default");}
+        save-rule => {root.ai-policy-command("rule");}
+        remove-rule => {root.ai-policy-command("remove");}
+        reload => {root.ai-policy-command("load");}
+        restore-defaults => {root.ai-policy-command("reset");}
     }
 
     // Local MCP proposals are reviewed here, never by an email's contents.

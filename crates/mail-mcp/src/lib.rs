@@ -14,6 +14,8 @@
 pub mod attachments;
 pub mod branding;
 pub mod bridge;
+pub mod policy;
+mod policy_server;
 
 use anyhow::{Context, Result, anyhow, bail};
 use flectar_mail_core::Core;
@@ -85,6 +87,10 @@ impl AiConfig {
 
 #[derive(Clone)]
 enum PendingKind {
+    Tool {
+        name: String,
+        args: Value,
+    },
     Cloud {
         draft_id: i64,
         snapshot: Value,
@@ -104,6 +110,8 @@ enum PendingKind {
 #[derive(Clone)]
 struct Pending {
     kind: PendingKind,
+    policy: policy::Decision,
+    context: policy::Context,
     summary: Value,
     created: Instant,
 }
@@ -117,6 +125,9 @@ pub struct Server {
     embedded: bool,
     cloud_progress: Arc<std::sync::Mutex<Value>>,
     storage_override: Option<Arc<dyn StorageProvider>>,
+    policy_store: policy::Store,
+    policy_io: Arc<tokio::sync::Mutex<()>>,
+    completed: Arc<Mutex<HashMap<String, policy_server::Completed>>>,
 }
 
 fn arg_i64(args: &Value, key: &str) -> Option<i64> {
@@ -308,6 +319,9 @@ fn new_pending_id() -> String {
 impl Server {
     pub fn new(core: Core, config: AiConfig) -> Self {
         Self {
+            policy_store: policy::Store::new(core.profile_data_dir()),
+            policy_io: Arc::new(tokio::sync::Mutex::new(())),
+            completed: Arc::new(Mutex::new(HashMap::new())),
             core,
             config,
             pending: Arc::new(Mutex::new(HashMap::new())),
@@ -318,7 +332,8 @@ impl Server {
     }
 
     /// Embed the tool layer over the already-running engine. Desktop actions
-    /// always require review; no second sync engine or database is opened.
+    /// follow the shared policy; cloud upload always requires in-app review.
+    /// No second sync engine or database is opened.
     pub fn embedded(core: Core, mut config: AiConfig) -> Self {
         config.ai_actions_require_confirmation = true;
         Self {
@@ -329,16 +344,16 @@ impl Server {
 
     /// Trusted in-process UI entry point, deliberately not a wire method.
     pub async fn approve_in_app(&self, id: &str) -> Result<Value> {
-        self.confirm(id).await
+        self.confirm(id, true).await
     }
 
     pub async fn cancel_in_app(&self, id: &str) -> Result<Value> {
-        self.cancel(id).await
+        self.cancel(id, "desktop_user").await
     }
 
     pub async fn pending_actions(&self) -> Vec<Value> {
-        let mut pending = self.pending.lock().await;
-        pending.retain(|_, p| p.created.elapsed() < PENDING_TTL);
+        self.expire_pending().await;
+        let pending = self.pending.lock().await;
         let mut actions: Vec<_> = pending.iter().collect();
         actions.sort_by_key(|(id, action)| (action.created, *id));
         actions
@@ -369,10 +384,12 @@ impl Server {
             .is_some_and(|p| matches!(p.kind, PendingKind::Cloud { .. }))
     }
 
-    pub async fn stage_cloud_draft(
+    async fn stage_cloud_checked(
         &self,
         mut draft: SaveDraftArgs,
         options: LinkOptions,
+        decision: &policy::Decision,
+        context: &policy::Context,
     ) -> Result<Value> {
         if !self.embedded {
             bail!(
@@ -398,10 +415,13 @@ impl Server {
         let draft_id = self.core.save_draft(draft).await?;
         let snapshot = serde_json::to_value(self.core.get_draft(draft_id).await?)?;
         summary["from"] = snapshot["from"].clone();
+        summary["policy"] = json!(decision);
         let id = new_pending_id();
         self.pending.lock().await.insert(
             id.clone(),
             Pending {
+                policy: decision.clone(),
+                context: context.clone(),
                 kind: PendingKind::Cloud {
                     draft_id,
                     snapshot,
@@ -471,15 +491,7 @@ impl Server {
 
     /// JSON schemas advertised by `tools/list`.
     pub fn tool_definitions(&self) -> Value {
-        let confirm_note = if self.config.ai_actions_require_confirmation {
-            if self.embedded && !self.config.allow_mcp_confirmation {
-                " Requires confirmation in the desktop app. Ask the user to review the pending-actions panel; MCP cannot approve."
-            } else {
-                " Requires confirmation: this only stages a pending action; show the summary to the user and call confirm_action after they approve."
-            }
-        } else {
-            ""
-        };
+        let confirm_note = " Subject to per-action AI policy. Results identify the applied rule. Cloud uploads always require in-app approval.";
         let addr = json!({"type":"array","items":{"type":"string"},"description":"Addresses like \"Name <a@b.com>\" or \"a@b.com\""});
         json!([
           {"name":"list_accounts","description":"List configured mail accounts (Gmail, Outlook, IMAP/SMTP such as GoDaddy or Hostinger, JMAP, POP3) with their sync state.","inputSchema":{"type":"object","properties":{}}},
@@ -516,14 +528,21 @@ impl Server {
               "cursor":{"type":"integer"},"accountId":{"type":"integer"},
               "waitSeconds":{"type":"integer","minimum":0,"maximum":120},"limit":{"type":"integer","minimum":1,"maximum":100}}}},
           {"name":"sync_now","description":"Ask the mail engine to check the server for new mail now.","inputSchema":{"type":"object","properties":{"accountId":{"type":"integer"}}}},
-          {"name":"list_pending_actions","description":"List staged send/reply/delete actions waiting for confirmation.","inputSchema":{"type":"object","properties":{}}},
+          {"name":"get_action_result","description":"Retrieve an app-approved action output using pendingId. Memory-only, up to 10 minutes, 32 results/16 MiB total. Policy is rechecked. Never retry a mutation because its result is unavailable.","inputSchema":{"type":"object","required":["pendingId"],"properties":{"pendingId":{"type":"string"}}}},
+          {"name":"list_pending_actions","description":"List proposal IDs, action and policy metadata only. Inspect sensitive proposal details in the desktop app.","inputSchema":{"type":"object","properties":{}}},
           {"name":"confirm_action","description":"Execute a staged send/reply/delete. Only call this after the user explicitly approved that exact action.","inputSchema":{"type":"object","required":["pendingId"],"properties":{"pendingId":{"type":"string"}}}},
           {"name":"cancel_action","description":"Discard a staged action (a staged email's draft is deleted).","inputSchema":{"type":"object","required":["pendingId"],"properties":{"pendingId":{"type":"string"}}}}
         ])
     }
 
     /// Run one tool. Errors become `isError` results for the client.
-    pub async fn call_tool(&self, name: &str, args: &Value) -> Result<Value> {
+    async fn dispatch(
+        &self,
+        name: &str,
+        args: &Value,
+        decision: &policy::Decision,
+        context: &policy::Context,
+    ) -> Result<Value> {
         if matches!(name, "send_message" | "reply_message" | "delete_message")
             && self.pending_actions().await.len() >= 100
         {
@@ -547,9 +566,9 @@ impl Server {
             "search_messages" => self.search(args).await,
             "read_message" => self.read_message(args).await,
             "download_attachment" => self.download_attachment(args).await,
-            "send_message" => self.send_message(args).await,
-            "reply_message" => self.reply_message(args).await,
-            "delete_message" => self.delete_message(args).await,
+            "send_message" => self.send_message(args, decision, context).await,
+            "reply_message" => self.reply_message(args, decision, context).await,
+            "delete_message" => self.delete_message(args, decision, context).await,
             "mark_read" => {
                 let ids = message_ids(args)?;
                 let kind = if arg_bool(args, "read").unwrap_or(true) {
@@ -571,7 +590,8 @@ impl Server {
                 self.core.sync_now(arg_i64(args, "accountId")).await?;
                 Ok(json!({"requested": true}))
             }
-            "list_pending_actions" => Ok(json!(self.pending_actions().await)),
+            "get_action_result" => self.get_action_result(req_str(args,"pendingId")?).await,
+            "list_pending_actions" => Ok(json!(self.pending_actions().await.into_iter().map(|v|json!({"pendingId":v["pendingId"],"action":v["summary"]["action"],"policy":v["summary"]["policy"]})).collect::<Vec<_>>())),
             "confirm_action" => {
                 if self
                     .requires_app_approval(req_str(args, "pendingId")?)
@@ -580,9 +600,9 @@ impl Server {
                 {
                     bail!("Approve this action in the desktop app (allow_mcp_confirmation=false)");
                 }
-                self.confirm(req_str(args, "pendingId")?).await
+                self.confirm(req_str(args, "pendingId")?, false).await
             }
-            "cancel_action" => self.cancel(req_str(args, "pendingId")?).await,
+            "cancel_action" => self.cancel(req_str(args, "pendingId")?, "mcp_client").await,
             other => bail!("unknown tool `{other}`"),
         }
     }
@@ -722,7 +742,13 @@ impl Server {
         Ok(json!({"path":path,"attachmentId":id}))
     }
 
-    async fn stage_or_send(&self, draft: SaveDraftArgs, kind_label: &str) -> Result<Value> {
+    async fn stage_or_send(
+        &self,
+        draft: SaveDraftArgs,
+        kind_label: &str,
+        decision: &policy::Decision,
+        context: &policy::Context,
+    ) -> Result<Value> {
         let mut attachment_summary = Vec::new();
         for a in &draft.attachments {
             attachment_summary.push(json!({"filename":a.filename,"mimeType":attachments::mime_type(&a.filename),"size":tokio::fs::metadata(&a.file_path).await?.len(),"sourcePath":a.file_path}));
@@ -743,11 +769,14 @@ impl Server {
         let draft_id = self.core.save_draft(draft).await?;
         let snapshot = serde_json::to_value(self.core.get_draft(draft_id).await?)?;
         summary["from"] = snapshot["from"].clone();
-        if self.config.ai_actions_require_confirmation {
+        summary["policy"] = json!(decision);
+        if decision.effect == policy::Effect::Ask {
             let id = new_pending_id();
             self.pending.lock().await.insert(
                 id.clone(),
                 Pending {
+                    policy: decision.clone(),
+                    context: context.clone(),
                     kind: PendingKind::Send { draft_id, snapshot },
                     summary: summary.clone(),
                     created: Instant::now(),
@@ -770,7 +799,12 @@ impl Server {
         )
     }
 
-    async fn send_message(&self, args: &Value) -> Result<Value> {
+    async fn send_message(
+        &self,
+        args: &Value,
+        decision: &policy::Decision,
+        context: &policy::Context,
+    ) -> Result<Value> {
         let (attachments, cloud) = self
             .prepare_attachments(args, req_i64(args, "accountId")?)
             .await?;
@@ -790,13 +824,19 @@ impl Server {
             attachments,
         };
         if let Some(options) = cloud {
-            self.stage_cloud_draft(draft, options).await
+            self.stage_cloud_checked(draft, options, decision, context)
+                .await
         } else {
-            self.stage_or_send(draft, "send").await
+            self.stage_or_send(draft, "send", decision, context).await
         }
     }
 
-    async fn reply_message(&self, args: &Value) -> Result<Value> {
+    async fn reply_message(
+        &self,
+        args: &Value,
+        decision: &policy::Decision,
+        context: &policy::Context,
+    ) -> Result<Value> {
         let id = req_i64(args, "messageId")?;
         let all = arg_bool(args, "replyAll").unwrap_or(false);
         let original = self.body(id).await?;
@@ -838,28 +878,36 @@ impl Server {
             attachments,
         };
         if let Some(options) = cloud {
-            self.stage_cloud_draft(draft, options).await
-        } else {
-            self.stage_or_send(draft, if all { "reply_all" } else { "reply" })
+            self.stage_cloud_checked(draft, options, decision, context)
                 .await
+        } else {
+            self.stage_or_send(
+                draft,
+                if all { "reply_all" } else { "reply" },
+                decision,
+                context,
+            )
+            .await
         }
     }
 
-    async fn delete_message(&self, args: &Value) -> Result<Value> {
+    async fn delete_message(
+        &self,
+        args: &Value,
+        decision: &policy::Decision,
+        context: &policy::Context,
+    ) -> Result<Value> {
         let ids = message_ids(args)?;
         let permanent = arg_bool(args, "permanent").unwrap_or(false);
-        if permanent && !self.config.allow_permanent_delete {
-            bail!(
-                "permanent deletion is disabled (allow_permanent_delete=false in {}); omit `permanent` to move to Trash",
-                branding::CONFIG_FILE
-            );
-        }
-        let summary = json!({"action": if permanent {"delete_permanently"} else {"move_to_trash"}, "messageIds": ids});
-        if self.config.ai_actions_require_confirmation {
+        let mut summary = json!({"action": if permanent {"delete_permanently"} else {"move_to_trash"}, "messageIds": ids});
+        summary["policy"] = json!(decision);
+        if decision.effect == policy::Effect::Ask {
             let id = new_pending_id();
             self.pending.lock().await.insert(
                 id.clone(),
                 Pending {
+                    policy: decision.clone(),
+                    context: context.clone(),
                     kind: PendingKind::Delete {
                         message_ids: ids,
                         permanent,
@@ -895,16 +943,19 @@ impl Server {
     }
 
     async fn take_pending(&self, id: &str) -> Result<Pending> {
+        self.expire_pending().await;
         let mut pending = self.pending.lock().await;
-        pending.retain(|_, p| p.created.elapsed() < PENDING_TTL);
         pending.remove(id).ok_or_else(|| {
             anyhow!("no pending action `{id}` (it may have expired after 30 minutes)")
         })
     }
 
-    async fn confirm(&self, id: &str) -> Result<Value> {
-        let p = self.take_pending(id).await?;
+    async fn execute_pending(&self, p: Pending, _in_app: bool) -> Result<Value> {
+        let proposal = p.clone();
         match p.kind {
+            PendingKind::Tool { name, args } => {
+                Box::pin(self.dispatch(&name, &args, &p.policy, &p.context)).await
+            }
             PendingKind::Cloud {
                 draft_id,
                 snapshot,
@@ -964,6 +1015,12 @@ impl Server {
                         }
                     }
                 }
+                if let Err(error) = self.recheck_cloud(&proposal).await {
+                    for id in &created {
+                        let _ = provider.delete(id).await;
+                    }
+                    return Err(error);
+                }
                 let current = self.core.get_draft(draft_id).await;
                 if current
                     .as_ref()
@@ -1018,8 +1075,9 @@ impl Server {
         }
     }
 
-    async fn cancel(&self, id: &str) -> Result<Value> {
+    async fn cancel(&self, id: &str, actor: &str) -> Result<Value> {
         let p = self.take_pending(id).await?;
+        let _ = self.record_cancel(&p, id, actor).await;
         if let PendingKind::Send { draft_id, .. } | PendingKind::Cloud { draft_id, .. } = p.kind {
             self.core.delete_draft(draft_id).await?;
         }
@@ -1109,7 +1167,14 @@ impl Server {
                         json!({"content": [{"type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default()}], "structuredContent": wrap_structured(v), "isError": false})
                     }
                     Err(e) => {
-                        json!({"content": [{"type": "text", "text": format!("Error: {e:#}")}], "isError": true})
+                        let policy =
+                            e.downcast_ref::<policy::Denied>()
+                                .map(|v| &v.0)
+                                .or_else(|| {
+                                    e.downcast_ref::<policy_server::RoutedError>()
+                                        .map(|v| &v.decision)
+                                });
+                        json!({"content": [{"type": "text", "text": format!("Error: {e:#}")}],"structuredContent":{"status":"error","policy":policy}, "isError": true})
                     }
                 })
             }

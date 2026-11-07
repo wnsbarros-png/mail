@@ -14,7 +14,7 @@ contas reais nem no Windows; não é uma promessa de compatibilidade já testada
 2. Inicie o cliente MCP apontando para `mail-mcp`.
 3. A ponte stdio conecta ao aplicativo e reutiliza seu motor de sincronização,
    banco e credenciais do sistema. Não inicia um segundo motor.
-4. Enviar, responder e excluir criam propostas. Em até aproximadamente 750 ms,
+4. Por padrão, enviar, responder e excluir criam propostas (as regras abaixo podem permitir ou bloquear). Em até aproximadamente 750 ms,
    o painel **Ações da IA aguardando revisão** aparece na janela. Ele mostra uma
    proposta por vez, o total pendente e um resumo legível em pt-BR em área rolável:
    remetente, destinatários, assunto, prévia do corpo e anexos para envios;
@@ -37,15 +37,36 @@ Só a interface pode aprovar. O arquivo `ai-mcp.json` na pasta de dados contém:
 `allow_mcp_confirmation: true` permite confirmação pelo cliente MCP também
 (reinicie o app depois de editar; deixe o cliente configurado para sempre perguntar).
 **Exceção: uploads de arquivos como link exigem sempre aprovação no app, mesmo com essa opção.**
-No app aberto, propostas sempre exigem confirmação, mesmo se
-`ai_actions_require_confirmation` estiver falso. Esse último ajuste só permite
-execução direta no modo independente (não recomendado). Arquivos inválidos
-voltam aos padrões seguros. A IA não tem ferramenta para alterar essas opções.
+`ai_actions_require_confirmation` e `allow_permanent_delete` são opções legadas: agora **`ai-policy.json` governa as ações em ambos os modos**, sem migração automática para permissões antigas. Os padrões continuam seguros; regras explícitas podem permitir ações normais sem perguntar. Exclusão permanente tem padrão Bloquear. A IA não tem ferramenta para alterar regras ou opções.
 
 Pendências vivem em memória por até 30 minutos e não sobrevivem ao reinício.
 Rascunhos ficam no banco e podem ser retomados manualmente após expiração/reinício.
 Um rascunho alterado depois de proposto perde a aprovação antiga: revise a versão
 editada no compositor ou peça outra proposta. Uma aprovação nunca é reutilizada.
+
+### Regras por ação e histórico (novo)
+
+Abra **Configurações → Geral → Regras de aprovação e histórico da IA**. O mesmo botão está nas configurações de login/nuvem. O motor do perfil precisa estar carregado. Há opções **Sempre permitir / Perguntar / Bloquear** para listar, ler/monitorar, pesquisar, marcar leitura, enviar, responder, mover à lixeira, excluir permanentemente, upload na nuvem, baixar anexos e sincronizar. Botões não têm emojis. Os rótulos da tela têm traduções pt-BR/EN; mensagens operacionais e histórico são bilíngues.
+
+- **Padrões seguros:** listar/ler/pesquisar permitidos; enviar/responder/lixeira/upload, marcar leitura, baixar e sincronizar perguntam; exclusão permanente bloqueada. As ações manuais normais do compositor não são ações de IA; envio manual como link passa pela mesma política de upload. Esta política governa o MCP e a ponte, não todas as funções internas de classificação por IA do projeto original.
+- Todas as ferramentas passam pelo mesmo avaliador. Respostas incluem `policy.effect`, `applied` (ação/ID da regra/efeito), `reason`, `revision`, `safe_fallback` e `in_app_only`. `read_message(markRead:true)` também avalia Marcar leitura; responder também avalia Ler. Um Bloquear em qualquer parte bloqueia a operação inteira. Pedidos multi-conta são negados por inteiro quando uma conta corresponde a um bloqueio; não há filtragem parcial silenciosa. Em operações de mensagem, usam-se os destinatários disponíveis no cabeçalho (To/Cc; também Bcc para envio). Em listagens/buscas sem metadados de cada mensagem, condições desconhecidas não habilitam Permitir e são tratadas conservadoramente como correspondentes para Bloquear/Perguntar: a operação inteira é bloqueada/perguntada, sem filtragem por linha.
+- Regras têm ID e condições opcionais: IDs das contas, todos os destinatários serem contatos **salvos**, lista de endereços/domínios exatos, conter destinatários novos, mínimo/máximo de destinatários únicos, anexos, links na nuvem. To/Cc/Bcc são considerados e deduplicados. A condição de links identifica anexos solicitados como link, não procura URLs arbitrárias no corpo. Contatos aprendidos apenas de e-mails recebidos **não** autorizam novos destinatários; salvos ou com `send_count > 0` contam como já conhecidos para a proteção de primeiro envio. Desativar aprendizagem de contatos pode fazer a proteção perguntar novamente.
+- Todas as condições são combinadas com E. Endereços e domínios formam uma lista combinada (OU). Para Permitir, **todos** os destinatários/contas precisam estar cobertos; para Bloquear/Perguntar, basta **qualquer** destinatário/conta dessa lista. Domínios são exatos, ignorando caixa, sem curinga ou correspondência por sufixo. Um Bloquear aplicável prevalece sobre todas as outras regras; caso contrário, a primeira regra aplicável vence, depois o padrão da ação.
+- **Invariantes:** upload na nuvem nunca se torna execução direta: exige aprovação no aplicativo mesmo com Permitir, e não funciona no modo independente. Enviar/responder a destinatários nunca contatados sempre pergunta, salvo uma regra Permitir **explícita** com `override_new_recipients:true`. Mudar apenas o padrão para Permitir não remove a proteção. Bloquear continua prevalecendo.
+- Salvar atualiza `ai-policy.json` versão 1 atomicamente (0600 em Unix), com revisão crescente. Arquivo ausente usa os padrões; JSON/versão/campos/regras inválidos, arquivo grande ou link simbólico usam padrões seguros, sinalizados por `safe_fallback`. A interface permite restaurar padrões. Não há ferramenta MCP para escrever regras. As regras são reavaliadas na aprovação, e antes de enfileirar depois de um upload; não desfazem efeitos já iniciados. O editor mantém a ordem; para reordenar, remova/recrie a regra ou edite o arquivo com o aplicativo parado. Mudar o ID cria uma nova regra, sem renomear/remover a anterior.
+- Se Ler/Buscar/Listar estiver em Perguntar, o pedido fica pendente sem revelar os dados. Após Aprovar no aplicativo, chame `get_action_result({"pendingId":"..."})`. A saída fica **somente em memória por até 10 minutos**, limitada a 32 resultados/16 MiB totais, com reavaliação de Bloquear ao recuperar. Pode ser removida antes por pressão do cache ou reinício. `not_available` não prova falha: **não repita envios/exclusões automaticamente**. `list_pending_actions` retorna apenas IDs, ação e política; resumos com corpos/caminhos ficam na interface. Respostas a mensagens com Ler=Perguntar não revelam o original na proposta MCP.
+- `ai-history.jsonl` é acrescido, nunca truncado/reescrito pela aplicação. Registra ator (cliente MCP/aprovação no app/configurações/sistema), ação, horário em milissegundos UTC (mostrado no horário local na interface), conta/contagens, presença de anexos/links, regra/revisão/decisão e resultado. **Sem corpos, assuntos, endereços de destinatários, caminhos ou credenciais.** Registrar o início/aprovação é obrigatório antes dos efeitos; falha bloqueia. Se o registro final falhar após um efeito, a saída marca `auditIncomplete` e avisa para não repetir automaticamente. Cancelamento/expiração registram na medida do possível para não impedir o descarte seguro.
+- Histórico somente leitura mostra até 200 registros da cauda de 256 KiB; Recarregar atualiza. Não há rotação/limpeza automática, exportação ou proteção criptográfica contra alteração pelo próprio usuário do SO. Registros parciais/corrompidos são ignorados na leitura; o próximo append inicia uma linha nova sem apagar o trecho parcial. O arquivo pode crescer e requer espaço livre.
+
+Exemplo de regra (o restante dos padrões pode ser omitido; usa padrões seguros por ação):
+
+```json
+{"version":1,"rules":[{"id":"contatos-sem-anexos","action":"send","effect":"allow","conditions":{"accounts":[1],"known_contacts":true,"domains":["example.invalid"],"max_recipients":3,"has_attachments":false,"has_cloud_links":false},"override_new_recipients":false}]}
+```
+
+![Tela real de regras com dados sintéticos](images/ai-policy-settings-pt-BR.png)
+
+**Teste no Windows:** compile os dois executáveis debug conforme abaixo; abra o app primeiro, conecte apenas uma conta de teste e abra Regras de aprovação e histórico. Confirme os padrões; coloque Ler em Perguntar, solicite uma leitura, aprove no app e recupere com `get_action_result`. Teste Bloquear envio e destinatário novo sem realizar envios reais. Revise o histórico. Esta tela foi capturada em Linux sem contas reais; Windows ainda não foi validado.
 
 ### Aplicativo fechado: modo independente
 
@@ -72,7 +93,8 @@ a sessão MCP para usar o modo independente. Não rode um binário oficial/antig
 | `mark_read` | Marcar mensagens lidas/não lidas |
 | `get_new_messages` | Acompanhar novidades por cursor; espera opcional de até 120 s |
 | `sync_now` | Solicitar sincronização |
-| `list_pending_actions`, `confirm_action`, `cancel_action` | Consultar/aprovar/cancelar propostas |
+| `list_pending_actions`, `confirm_action`, `cancel_action` | Consultar IDs/metadados, aprovar/cancelar propostas |
+| `get_action_result` | Recuperar a saída de uma ação aprovada no aplicativo (cache temporário) |
 
 Não há respostas autônomas ou assinatura permanente de eventos: o assistente deve
 chamar `get_new_messages` novamente e propor respostas quando solicitado.
@@ -352,7 +374,7 @@ and a five-second authentication deadline. It is not HTTP and is never LAN-bound
 Do not share your app data directory. Processes running as your OS user remain
 trusted; the token is not protection from malicious code running as you.
 
-Send/reply/delete always stage proposals in desktop mode. A review panel appears
+By default, send/reply/delete stage proposals in desktop mode; explicit policy rules can instead allow or block them. A review panel appears
 in the app within roughly 750 ms, with a readable Portuguese summary/body preview, pending count,
 and text-only **Approve / Cancel** buttons. It shows one proposal at a time.
 Sends show account ID, recipients, subject, body and attachment names/MIME types;
@@ -364,9 +386,7 @@ Open the window to review if it is in the tray.
 
 `confirm_action` is rejected over MCP while the app is open unless the user
 explicitly sets `allow_mcp_confirmation: true` in `ai-mcp.json` and restarts the
-app. `ai_actions_require_confirmation` defaults true and only allows bypassing
-review in standalone mode; desktop mode always stages. Permanent deletion is
-disabled unless `allow_permanent_delete: true`. Invalid config fails safe.
+app. Legacy `ai_actions_require_confirmation` / `allow_permanent_delete` no longer control execution: **`ai-policy.json` governs both embedded and standalone requests**. No unsafe legacy settings are migrated automatically. Permanent deletion defaults to Block; explicit policy can change it. Invalid policy files use safe defaults.
 The AI has no settings-edit tool. Pending proposals expire after 30 minutes or
 restart; saved drafts remain for manual recovery. Modified drafts invalidate old
 approvals. A pending ID can be consumed only once.
@@ -379,12 +399,32 @@ rather than silently starting another engine. Restart the MCP session to switch
 modes. Do not run an older/official app (without this shared lock) on the same
 profile concurrently.
 
+### Per-action rules and append-only history (new)
+
+Open **Settings → General → AI approval rules and history** (also available under Sign-in/Cloud settings), after the profile engine has loaded. Text-only controls have Portuguese/English labels; operational statuses/history use bilingual text. Select **Always allow / Ask / Block** for each action. Safe defaults allow list/read/search; send/reply/trash/cloud upload, mark-read, download and sync ask; permanent delete is blocked. Normal manual composition is outside AI policy, except manual cloud sends use the same upload boundary. Existing internal AI categorization is not covered.
+
+A single evaluator governs every MCP tool and the bridge. Results/errors identify `policy.effect`, `applied` action/rule IDs/effects, `reason`, `revision`, `safe_fallback` and `in_app_only`. Reading with `markRead:true` also checks mark-read policy; replies also check read policy. Compound operations fail if any facet blocks. Message actions use available header recipients (To/Cc; outgoing sends also include Bcc). Lists/searches do not know every matching message’s metadata: unknown recipient/attachment conditions cannot match Allow and conservatively match Ask/Block, affecting the whole operation rather than filtering rows. Multi-account requests fail wholly on a matching restrictive account rule; no silent partial filtering.
+
+Conditions: account IDs, saved-address-book contacts, exact address/domain allowlists, new recipients, minimum/maximum unique recipient count, attachments and cloud links. To/Cc/Bcc are deduplicated together. The cloud-link condition describes requested cloud attachments, not arbitrary pasted URLs in the body. Saved contacts or addresses with outgoing `send_count > 0` are previously contacted; incoming-only mail/spam cannot bypass the first-recipient guard. Turning off outgoing contact learning may conservatively ask again. Saved-contact rules specifically require address-book entries, not learned suggestions.
+
+Conditions combine with AND; addresses/domains within an allowlist combine with OR. Allow must cover every recipient/account; Ask/Block match any account or allowlist recipient. Domains are exact, case-insensitive, no wildcards/suffix matching. Any matching Block wins globally; otherwise the first matching rule wins, then the per-action default. Cloud **always requires in-app approval**, even with Allow and MCP confirmation enabled. New recipients always ask unless an explicit matching Allow rule sets `override_new_recipients:true`; changing only the default cannot override this. Block still wins.
+
+Versioned `ai-policy.json` saves atomically (Unix 0600), increments revision and falls back safely on invalid JSON/schema/version/rules, oversized/non-regular files or symlinks; missing files use defaults. No MCP settings-write tool exists. Approval rechecks current policy; cloud sends recheck before queueing after upload. Policy changes cannot roll back already-started effects. The UI preserves rule order; remove/recreate or edit offline to reorder. Changing an ID creates a new rule rather than renaming the old one. The JSON example in the Portuguese section is complete and uses safe defaults for omitted actions.
+
+Ask also works for reads/searches/lists: approve in the app, then call `get_action_result({"pendingId":"..."})`. Outputs are **memory-only for at most 10 minutes**, bounded to 32 entries/16 MiB total; eviction/restart can make them unavailable sooner. Retrieving rechecks the underlying Block policy. `not_available` is not proof of failure: **never automatically retry mutations**. Pending-list controls expose IDs/action/policy only, not bodies/paths. Reply proposals do not expose the original content to MCP when read policy asks. Review/confirm/cancel/result-fetch controls have a fixed policy to avoid deadlocking review, but confirmation/result access always recheck the underlying action.
+
+`ai-history.jsonl` is append-only in application behavior: actor, action, timestamp, account IDs/counts, attachment/cloud flags, rule/revision/decision/result; **no bodies, subjects, recipient addresses, file paths or credentials**. Start/approval logging must succeed before effects. If the final log fails after an effect, the result includes `auditIncomplete` plus a do-not-retry warning. Cancel/expiry logging is best effort so safe cleanup remains possible. Policy saves record intent first; a failure after the configuration was persisted explicitly asks you to reload before retrying.
+
+The app shows the latest at most 200 records from the last 256 KiB, in local time, updated with Reload. No automatic rotation/deletion/export, cryptographic integrity or protection against the same OS user editing the log. Partial/corrupt lines are skipped; a future append adds a newline without erasing crash remnants. The file can grow. Screenshot above is the actual Slint screen with synthetic data.
+
+**Windows trial:** build both debug binaries, start the app first, use test accounts only, open Rules, verify defaults, set Read to Ask, approve a read in-app and retrieve its result. Set Send to Block and verify refusal/history without actually sending. Windows remains unvalidated; Linux screenshot/tests use no real accounts/uploads/emails.
+
 ### Tools and attachments
 
 Tools: `list_accounts`, `list_folders`, `list_messages`, `search_messages`,
 `read_message`, `send_message`, `reply_message`, `download_attachment`,
 `delete_message`, `mark_read`, `get_new_messages`, `sync_now`,
-`list_pending_actions`, `confirm_action`, `cancel_action`.
+`list_pending_actions`, `confirm_action`, `cancel_action`, `get_action_result`.
 
 Send/reply accept `attachments: ["/absolute/path/report.pdf"]`: up to 32 regular
 files, 25 MiB combined for ordinary MIME attachments (cloud links: see below). Paths are on the app/MCP host, not a remote AI server.

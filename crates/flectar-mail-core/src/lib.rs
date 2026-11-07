@@ -826,6 +826,10 @@ pub struct Core {
 }
 
 impl Core {
+    /// Profile-local policy and audit files; never a credential location.
+    pub fn profile_data_dir(&self) -> &std::path::Path {
+        &self.paths.data_dir
+    }
     #[cfg(desktop)]
     pub async fn start(paths: Paths) -> Result<Core> {
         Self::start_with_platform(
