@@ -23,6 +23,7 @@ pub struct DocumentRecord {
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Extraction {
+    pub message_id: i64,
     pub documents: Vec<DocumentRecord>,
     pub warnings: Vec<String>,
     pub truncated: bool,
@@ -91,6 +92,7 @@ impl Core {
         self.db.write(|c| schema(c)).await?;
         let(message,attachments)=self.db.read(move|c|{let message=repo::messages::detail(c,message_id)?;let mut q=c.prepare("SELECT id,COALESCE(filename,''),size,file_path FROM attachments WHERE message_id=?1 AND is_inline=0 ORDER BY id LIMIT 17")?;let attachments=q.query_map([message_id],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,String>(1)?,r.get::<_,Option<i64>>(2)?,r.get::<_,Option<String>>(3)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;Ok((message,attachments))}).await?;
         let mut result = Extraction {
+            message_id,
             truncated: attachments.len() > 16,
             ..Default::default()
         };
@@ -166,7 +168,7 @@ impl Core {
             let filename = name.clone();
             let body = body.clone();
             // One bounded PDF/XML parser at a time, off the UI/async executor.
-            let _guard = PARSE_LOCK.lock().await;
+            let guard = PARSE_LOCK.lock().await;
             let parsed = tokio::task::spawn_blocking(move || {
                 parse_bytes(&filename, &bytes, reference, &body)
             })
@@ -200,6 +202,17 @@ impl Core {
                 break;
             }
         }
+        let mut output_bytes = 0usize;
+        result.documents.retain(|r| {
+            output_bytes = output_bytes
+                .saturating_add(serde_json::to_vec(r).map(|v| v.len()).unwrap_or(usize::MAX));
+            if output_bytes > 512 * 1024 {
+                result.truncated = true;
+                false
+            } else {
+                true
+            }
+        });
         // Replace stale evidence even when an attachment became unavailable/invalid.
         let records = result.documents.clone();
         self.db.write(move|c|{let tx=c.unchecked_transaction()?;tx.execute("DELETE FROM ai_documents WHERE message_id=?1",[message_id])?;for row in records{let d=&row.document;let issue=d.issued_at.as_deref().and_then(|s|s.get(..10)).filter(|s|NaiveDate::parse_from_str(s,"%Y-%m-%d").is_ok()).map(str::to_owned).unwrap_or_else(||reference.to_string());tx.execute("INSERT INTO ai_documents(message_id,attachment_id,doc_index,parser_version,kind,cnpj,recipient_cnpj,issued_on,due_date,source_sha256,json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",params![message_id,row.attachment_id,row.index as i64,PARSER_VERSION,d.kind_name(),d.issuer.as_ref().and_then(|p|p.cnpj.as_deref()),d.recipient.as_ref().and_then(|p|p.cnpj.as_deref()),issue,d.due_date,row.source_sha256,serde_json::to_string(&row).map_err(|_|error("Cannot serialize extracted document"))?])?;}tx.commit()?;Ok(())}).await?;
@@ -209,7 +222,8 @@ impl Core {
     pub async fn list_documents(&self, filters: DocumentFilters) -> Result<Vec<DocumentRecord>> {
         filters.validate()?;
         self.db.write(|c| schema(c)).await?;
-        self.db.read(move|c|{let kind=filters.tipo.map(|k|FinancialDocument::new(k).kind_name());let mut q=c.prepare("SELECT d.json FROM ai_documents d JOIN messages m ON m.id=d.message_id WHERE d.parser_version=?1 AND (?2 IS NULL OR d.kind=?2) AND (?3 IS NULL OR d.issued_on>=?3) AND (?4 IS NULL OR d.issued_on<=?4) AND (?5 IS NULL OR d.cnpj=?5 OR d.recipient_cnpj=?5) AND (?6 IS NULL OR d.due_date>=?6) AND (?7 IS NULL OR d.due_date<=?7) AND (?8 IS NULL OR m.account_id=?8) ORDER BY d.issued_on DESC,d.message_id DESC,d.attachment_id,d.doc_index LIMIT ?9")?;let values=q.query_map(params![PARSER_VERSION,kind,filters.start,filters.end,filters.cnpj,filters.due_after,filters.due_before,filters.account_id,filters.limit.unwrap_or(100)as i64],|r|r.get::<_,String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;let mut rows=Vec::new();for v in values{if v.len()>128*1024{continue;}
+        self.db.read(move|c|{let kind=filters.tipo.map(|k|FinancialDocument::new(k).kind_name());let mut q=c.prepare("SELECT d.json FROM ai_documents d JOIN messages m ON m.id=d.message_id WHERE d.parser_version=?1 AND (?2 IS NULL OR d.kind=?2) AND (?3 IS NULL OR d.issued_on>=?3) AND (?4 IS NULL OR d.issued_on<=?4) AND (?5 IS NULL OR d.cnpj=?5 OR d.recipient_cnpj=?5) AND (?6 IS NULL OR d.due_date>=?6) AND (?7 IS NULL OR d.due_date<=?7) AND (?8 IS NULL OR m.account_id=?8) ORDER BY d.issued_on DESC,d.message_id DESC,d.attachment_id,d.doc_index LIMIT ?9")?;let values=q.query_map(params![PARSER_VERSION,kind,filters.start,filters.end,filters.cnpj,filters.due_after,filters.due_before,filters.account_id,filters.limit.unwrap_or(100)as i64],|r|r.get::<_,String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;let mut rows=Vec::new();let mut bytes=0usize;for v in values{bytes=bytes.saturating_add(v.len());if bytes>512*1024{break;}
+if v.len()>128*1024{continue;}
 if let Ok(mut row)=serde_json::from_str::<DocumentRecord>(&v){row.document.refresh_warnings(Local::now().date_naive());rows.push(row);}}Ok(rows)}).await
     }
     pub async fn export_documents_csv(
@@ -247,7 +261,7 @@ if let Ok(mut row)=serde_json::from_str::<DocumentRecord>(&v){row.document.refre
     }
 }
 pub fn csv_cell(s: &str) -> String {
-    let s = clean(s);
+    let s:String = s.chars().filter(|c|!c.is_control()&&!matches!(*c,'\u{200b}'..='\u{200f}'|'\u{202a}'..='\u{202e}'|'\u{2066}'..='\u{2069}')).take(16*1024).collect();
     let trimmed = s.trim_start();
     let safe = if trimmed.starts_with(['=', '+', '-', '@']) {
         format!("'{s}")

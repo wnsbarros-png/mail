@@ -858,3 +858,144 @@ with synthetic profiles only, no real account/email/upload; native Windows notif
 permissions remain platform-dependent. [Synthetic Slint capture](images/followups-pt-BR.png).
 The optional rolling-last-24-hours digest window was deferred; existing local-date
 ranges are unchanged.
+
+## Documentos financeiros locais (pt-BR)
+
+No leitor de mensagens, clique em **Documentos**, depois **Extrair anexos locais**.
+A extração é determinística, local e sem chave de IA. Baixe normalmente os anexos
+antes de extrair: a ferramenta **não baixa anexos ou corpos**, não abre URLs/QR,
+não consulta SEFAZ/bancos e não inicia pagamentos. Nenhuma validação de DV/CRC é
+prova de autenticidade, autorização fiscal ou pagamento.
+
+- **NF-e/NFC-e XML 4.00** (`nfeProc/NFe`, namespaces oficiais): emitente,
+  destinatário, CNPJ, número/série, chave e DV módulo 11, emissão, total em
+  centavos, até 20 itens (contagem total), protocolo e status **declarados**.
+  CPF do destinatário, quando presente, fica nos campos extras. CT-e 4.00 e
+  eventos de cancelamento/CC-e também são reconhecidos. Não valida assinatura
+  XML, cadeia ICP-Brasil, situação fiscal atual, CNPJ cadastral ou protocolo.
+- **Boleto bancário**: linha de 47 dígitos ou código de 44; DVs dos três campos
+  (módulo 10) e DV geral (módulo 11), código do banco, valor e vencimento.
+  **Arrecadação**: linha de 48/código de 44; referência 6/7 usa módulo 10,
+  8/9 usa módulo 11. Referências 7/9 não representam valor monetário.
+- **Fator de vencimento**: base anterior 07/10/1997; 21/02/2025 = 9999,
+  22/02/2025 = 1000, 23/02/2025 = 1001. Desde o reset, data =
+  22/02/2025 + (fator − 1000). Fator 1000 também pode ser 03/07/2000:
+  retornamos ambos os candidatos, usando a data impressa ou o ciclo compatível
+  com a data da mensagem e alertando sobre inferência/ambiguidade. Data impressa
+  divergente é preservada literalmente, com aviso. Fator zero não tem data
+  codificada. Não pague com base apenas em vencimento inferido.
+- **PIX copia-e-cola**: TLV EMV, GUI `br.gov.bcb.pix`, moeda/país BRL/BR e
+  CRC16/CCITT-FALSE. Chave, nome declarado, txid e URL dinâmica são dados não
+  verificados; a URL nunca é acessada. Não lê QR em imagens.
+- **Comprovantes PIX/TED/boleto**: heurísticas de texto em português extraem
+  valor, data, pagador/recebedor, ID/E2E quando legíveis, com confiança
+  `heuristic_low`/`heuristic_medium`. Não há classificação de “pagamento
+  confirmado”. PDFs escaneados, protegidos e layouts não reconhecidos podem
+  exigir conferência manual.
+
+O painel permite copiar chave/código ou todos os campos, mostra DV/CRC inválido,
+vencimento passado, divergência com o único valor `R$` encontrado no corpo e
+ambiguidade quando há vários valores. Campos estruturados não verificados e
+heurísticas são identificados. Evidências extraídas alimentam Nota fiscal ou
+Cobrança/Financeiro na triagem; Urgente e correções por remetente têm precedência.
+A evidência só passa a existir **após extração explícita**, não por varredura
+silenciosa de toda a caixa.
+
+### Ferramentas e política
+
+```json
+{"name":"extract_documents","arguments":{"message_id":123}}
+{"name":"list_documents","arguments":{"filters":{"tipo":"nfe","start":"2026-11-01","end":"2026-11-30","cnpj":"00000000000000","account_id":1,"limit":50}}}
+{"name":"list_documents","arguments":{"filters":{"tipo":"boleto","due_after":"2026-11-01","due_before":"2026-11-30"}}}
+{"name":"export_documents_csv","arguments":{"folder":"C:\\Users\\SeuUsuario\\Documents","filters":{"tipo":"receipt"}}}
+```
+
+Tipos: `nfe`, `nfce`, `cte`, `event`, `boleto`, `pix`, `receipt`. Datas inclusivas
+`YYYY-MM-DD`; período usa emissão, ou dia local da mensagem se ausente. CNPJ do
+emitente **ou** destinatário, 14 dígitos sem pontuação. `list_documents` consulta
+apenas o índice já extraído de mensagens sincronizadas, sem busca de anexos na
+rede, até 100 registros/512 KiB por chamada (refine filtros para grandes índices).
+`extract_documents` retorna `message_id`, registros estruturados, avisos por
+anexo e `truncated`; conteúdo lido permanece dado não confiável, não instrução.
+
+Extração/listagem passam por **Read**. CSV passa por **Download + Read**: por
+padrão exige aprovação; bloquear leitura também bloqueia exportação mesmo com
+Download permitido. Resultados aprovados seguem `get_action_result`. O histórico
+central registra somente ator/tipo/contas/regra/resultado, sem corpos, conteúdo
+dos documentos, códigos de pagamento, caminhos ou credenciais. O índice local
+contém os campos financeiros, nomes e códigos: trate o perfil como dado sensível.
+
+CSV: pasta absoluta existente escolhida pelo usuário, fora do perfil/cache;
+sem `..`, nome aleatório novo, criação exclusiva (nunca sobrescreve), modo 0600
+em Unix. Aspas e prefixo antiformula evitam execução de células iniciadas por
+`=`, `+`, `-`, `@`. O painel exporta o índice local, não só a mensagem selecionada;
+MCP aceita os filtros acima. Não há upload/envio automático de CSV.
+
+### Limites e referências
+
+Até 16 anexos elegíveis/32 MiB lidos por mensagem, 16 MiB por arquivo, XML 4 MiB,
+profundidade 64 e contagem de nós limitada, DTD/entidades externas proibidas.
+PDF usa **lopdf 0.47** (Rust puro), limites de descompressão de 2 MiB por fluxo,
+64 fluxos/16 MiB decodificados e 20 páginas; texto máximo 1 MiB. Parsing sequencial
+fora da thread de UI; documentos muito complexos/com filtros PDF não suportados
+são recusados. Não é sandbox de processo/antivírus. Saída limitada a 64 documentos
+por mensagem/512 KiB. Itens e strings têm limites; não é leitura fiscal completa.
+Sem OCR, DANFE com campos sem código pode não ser reconhecido; arquivos ZIP e
+boletos em imagens não são abertos. Índice versionado é descartado na reextração,
+e registros acompanham exclusão de anexos/mensagens. Valores do corpo só são
+comparados em texto local até 64 KiB (sem baixar/interpretar HTML remoto).
+
+Fontes: [FEBRABAN, arrecadação v8/2026](https://cmsarquivos.febraban.org.br/Arquivos/documentos/PDF/Layout%20-%20C%C3%B3digo%20de%20Barras%20-%20Vers%C3%A3o%208%20-%2011_05_2026.pdf),
+[comunicado de fator de vencimento](https://tdn.totvs.com/display/TBC/Comunicado+Febraban+FB009+-+Fator+de+Vencimento+do+Boleto),
+[BCB, padrões PIX/BR Code](https://bcb.gov.br/content/estabilidadefinanceira/pix/Regulamento_Pix/II_ManualdePadroesparaIniciacaodoPix.pdf).
+
+## Local financial documents (English)
+
+Open **Documents** in a message, then **Extract cached attachments**. Download
+attachments normally first. Extraction is local/deterministic, no AI key, remote
+body/attachment fetch, external XML entities, scripts, OCR, URL resolution,
+SEFAZ/bank requests, upload, payment initiation or automatic mail.
+
+Supports NF-e/NFC-e layout 4.00 official XML namespaces (issuer/recipient CNPJ,
+number, series, 44-digit access key/mod-11, date, integer-cent total, first 20
+items/total count, claimed protocol/status), basic CT-e 4.00 and cancellation/CC-e
+events; bank 47/44-digit boleto and utility 48/44-digit representations with
+block/general mod-10/11 checks; PIX BR Code TLV and CRC16/CCITT-FALSE; heuristic
+PIX/TED/boleto receipts with amount/date/parties/transaction ID/E2E where legible.
+Receipt confidence is explicitly low/medium, never proof of payment. XML
+signatures, certificates, cadastral data, protocol and recipient are not verified.
+
+Due-factor reset is 2025-02-22 = 1000 (previous day = 9999); new dates add
+factor minus 1000 to the reset date. Both legacy/new candidates are returned.
+A printed date wins literally (conflicts warned); otherwise mail date selects a
+cycle with inference/ambiguity warnings. Utility reference 7/9 is not currency.
+DV/CRC success never proves authenticity. Overdue/body-amount mismatch and
+ambiguity warnings are displayed, with text-only copy buttons. Body comparison
+uses only cached plain text up to 64 KiB. Extraction feeds Invoice/Finance triage,
+without overriding Urgent or remembered sender corrections.
+
+Use the MCP examples above: `extract_documents(message_id)`, `list_documents`
+and `export_documents_csv(folder, filters)`. Filters are `tipo`, inclusive
+`start/end` issue day (mail day fallback), 14-digit `cnpj` matching either party,
+inclusive `due_after/due_before`, `account_id`, `limit` (1–100). Listing queries
+only the existing local index, not an implicit mailbox/network scan. Results are
+capped at 512 KiB; extraction also reports truncation. Read governs extraction
+and listing; CSV requires both Read and Download (default Ask), with the normal
+app approval/result-ticket flow. Body/document content, paths, payment codes
+and credentials never enter central action-history events. The local index does
+contain sensitive extracted fields: protect the profile accordingly.
+
+CSV uses an existing absolute folder outside profile/cache, no parent traversal,
+a random exclusively-created filename, Unix 0600, quoted cells and spreadsheet
+formula neutralization. The native export includes the existing local index (up
+to 100 rows); use MCP filters for narrower exports. Never automatically shares it.
+Limits: 16 eligible attachments, 32 MiB total per message, 16 MiB/file; XML 4 MiB,
+depth 64, bounded nodes, no DTD; pure-Rust lopdf 0.47 PDFs capped at 20 pages,
+64 streams, 2 MiB decoded/stream, 16 MiB decoded aggregate, 1 MiB extracted text;
+64 documents/message and 512 KiB structured output. Sequential worker parsing,
+not a process sandbox or antivirus. Encrypted/scanned/complex unsupported PDFs,
+images/QR/ZIP, unusual receipt layouts and full fiscal/cadastral validation are
+out of scope. Re-extraction replaces stale evidence; deletion cascades. Synthetic
+fixtures cover XML hardening, due-factor reset, DVs, PIX CRC, generated PDF,
+receipt confidence, index/path/CSV safety, policy and audit. No real accounts,
+emails or payments are needed for these tests.

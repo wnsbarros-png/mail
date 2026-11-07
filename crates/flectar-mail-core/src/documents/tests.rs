@@ -332,3 +332,16 @@ fn pdf_text_fixture_and_no_text_or_malformed_refused() {
     assert!(d.iter().any(|d| d.kind == Kind::Boleto));
     assert!(parse_bytes("a.pdf", b"%PDF-1.7 corrupted", day("2026-11-07"), "").is_err());
 }
+
+#[test]
+fn independent_checksum_vectors() {
+    assert_eq!(mod10("1234567890"), 3);
+    assert_eq!(mod11("1234567890"), 0);
+    assert_eq!(bank_dv("1234567890"), 1);
+    assert_eq!(mod11("5"), 1);
+    assert_eq!(mod11("6"), 0);
+    assert_eq!(mod11("0"), 0);
+    for s in ["5", "6", "0"] {
+        assert_eq!(bank_dv(s), 1);
+    }
+}

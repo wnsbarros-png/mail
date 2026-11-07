@@ -225,6 +225,7 @@ pub(crate) fn register(app: &AppWindow, state: &Rc<RefCell<InboxState>>, runtime
             let _lease = source;
             let _ = weak.upgrade_in_event_loop(move |app| {
                 app.set_documents_busy(false);
+                if app.get_documents_message().as_str()!=id {app.set_documents_status("A mensagem selecionada mudou; extraia novamente. / Selected message changed; extract again.".into());return;}
                 match result {
                     Ok((tool, value)) if tool == "export_documents_csv" => app
                         .set_documents_status(
@@ -232,7 +233,8 @@ pub(crate) fn register(app: &AppWindow, state: &Rc<RefCell<InboxState>>, runtime
                         ),
                     Ok((_, value)) => match serde_json::from_value::<Extraction>(value) {
                         Ok(data) => {
-                            present(&app, data.documents);
+                            if data.message_id.to_string()!=id {app.set_documents_status("A leitura anterior era de outra mensagem; extraia novamente. / Previous result was for another message; extract again.".into());return;}
+                                    present(&app, data.documents);
                             app.set_documents_status(
                                 format!(
                                     "{}{}",
@@ -255,4 +257,51 @@ pub(crate) fn register(app: &AppWindow, state: &Rc<RefCell<InboxState>>, runtime
             });
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn approved_read_result_is_consumed_once_without_another_proposal() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = crate::mail::CoreMailSource::start(
+            flectar_mail_core::config::Paths::for_tests(dir.path()),
+            Arc::new(flectar_mail_core::accounts::credentials::UnavailableCredentialStore),
+            Arc::new(flectar_mail_core::oauth::redirect::LoopbackRedirectBroker::default()),
+        )
+        .await
+        .unwrap();
+        let server = source.ai_server();
+        let mut cfg = server.policy_config().await.0;
+        cfg.defaults.insert(
+            mail_mcp::policy::Action::Read,
+            mail_mcp::policy::Effect::Ask,
+        );
+        server.save_policy(cfg).await.unwrap();
+        let ticket: Ticket = Arc::new(Mutex::new(None));
+        assert!(
+            run(&source, &ticket, "list_documents", &json!({}))
+                .await
+                .is_err()
+        );
+        assert!(
+            run(&source, &ticket, "list_documents", &json!({}))
+                .await
+                .is_err()
+        );
+        let pending = server.pending_actions().await;
+        assert_eq!(pending.len(), 1);
+        server
+            .approve_in_app(pending[0]["pendingId"].as_str().unwrap())
+            .await
+            .unwrap();
+        let (tool, value) = run(&source, &ticket, "list_documents", &json!({}))
+            .await
+            .unwrap();
+        assert_eq!(tool, "list_documents");
+        assert_eq!(value, json!([]));
+        assert!(ticket.lock().unwrap().is_none());
+        assert!(server.pending_actions().await.is_empty());
+    }
 }

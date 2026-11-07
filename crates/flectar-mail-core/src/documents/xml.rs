@@ -142,6 +142,9 @@ pub(super) fn parse(bytes: &[u8]) -> Result<FinancialDocument> {
     });
     d.issuer = party(info, "emit");
     d.recipient = party(info, "dest");
+    if let Some(cpf) = value(info, &["dest", "CPF"]) {
+        d.fields.insert("recipient_cpf".into(), cpf);
+    }
     d.number = value(info, &["ide", if cte { "nCT" } else { "nNF" }]);
     d.series = value(info, &["ide", "serie"]);
     d.issued_at = value(info, &["ide", "dhEmi"]);
