@@ -59,6 +59,22 @@ impl Server {
         })?;
         Ok(config)
     }
+    /// Digest delivery has no caller-controlled recipients: only this account's address.
+    /// It is still a normal send subject to central policy and the audit journal.
+    pub async fn propose_digest_email(
+        &self,
+        account_id: i64,
+        digest: &flectar_mail_core::triage::Digest,
+    ) -> Result<Value> {
+        let account = self
+            .core
+            .list_accounts()
+            .await?
+            .into_iter()
+            .find(|a| a.id == account_id)
+            .ok_or_else(|| anyhow!("Unknown digest account"))?;
+        self.call_tool_from_app("send_message",&json!({"accountId":account_id,"to":[account.email],"subject":format!("Resumo do dia / Daily digest — {}",digest.start),"body":digest.text()})).await
+    }
     pub async fn action_history(&self) -> Result<Vec<Event>> {
         let _guard = self.policy_io.lock().await;
         let store = self.policy_store.clone();

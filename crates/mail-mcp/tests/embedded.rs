@@ -1361,7 +1361,13 @@ async fn digest_account_policy_cannot_be_narrowed_by_ignored_fields() {
 #[tokio::test]
 async fn daily_self_email_stays_pending_without_network() {
     let (server, core, _dir) = fixture(AiConfig::default()).await;
-    let v=server.call_tool_from_app("send_message",&json!({"accountId":1,"to":["me@example.invalid"],"subject":"Synthetic digest","body":"Synthetic counts only"})).await.unwrap();
+    let day = flectar_mail_core::triage::today();
+    let digest = core
+        .get_digest(day.clone(), day, None, None, false)
+        .await
+        .unwrap();
+    let v = server.propose_digest_email(1, &digest).await.unwrap();
+
     assert_eq!(v["status"], "pending_confirmation");
     assert_eq!(server.pending_actions().await.len(), 1);
     let draft = core

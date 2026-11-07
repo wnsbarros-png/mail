@@ -185,15 +185,7 @@ async fn daily_tick(
         let id = s
             .account_id
             .ok_or_else(|| anyhow::anyhow!("Missing account"))?;
-        let account = core
-            .list_accounts()
-            .await?
-            .into_iter()
-            .find(|a| a.id == id)
-            .ok_or_else(|| anyhow::anyhow!("Unknown account"))?;
-        let args = json!({"accountId":id,"to":[account.email],
-            "subject":format!("Resumo do dia / Daily digest — {}",d.start),"body":d.text()});
-        match server.call_tool_from_app("send_message", &args).await {
+        match server.propose_digest_email(id, &d).await {
             Ok(v) if v["status"] == "pending_confirmation" => {
                 "Envio do resumo aguardando aprovação / Digest email awaiting approval"
             }
